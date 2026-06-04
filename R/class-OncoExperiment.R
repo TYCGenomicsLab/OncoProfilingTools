@@ -5,7 +5,7 @@
 library(methods)
 
 #' OncoExperiment S4 class definition
-#' This class is designed to hold all relevant data and results for an oncology experiment, 
+#' This class is designed to hold all relevant data and results for an oncology experiment,
 #' including assays, models, graphs, and metadata.
 #' @slot Optional project_name A character string representing the name of the project.
 #' @slot version A character string representing the version of the package.
@@ -32,7 +32,7 @@ methods::setClass("OncoExperiment",
 #' OncoExperiment constructor function
 #' This function creates a new OncoExperiment object with the specified project name, assays,
 #' models, graphs, and metadata. The version is set to "0.1.0" by default.
-#' This class is designed to hold all relevant data and results for an oncology experiment, 
+#' This class is designed to hold all relevant data and results for an oncology experiment,
 #' including assays, models, graphs, and metadata. You should not need to define any slots for a blank experiment.
 #' @param project_name A character string representing the name of the project. Default is "OncoExperiment Project".
 #' @param assays A list of OncoAssay objects, such as gene expression matrices or other experimental data. Default is an empty list.
@@ -45,13 +45,12 @@ methods::setClass("OncoExperiment",
 #' experiment <- OncoExperiment()
 #' @export
 OncoExperiment <- function(
-    project_name = "OncoExperiment Project", 
-    assays = list(),
-    models = list(),
-    graphs = list(),
-    metadata = list()
+  project_name = "OncoExperiment Project",
+  assays = list(),
+  models = list(),
+  graphs = list(),
+  metadata = list()
 ) {
-
   # TODO: add validation checks for input parameters once sub-classes are defined
 
   methods::new("OncoExperiment",
@@ -66,7 +65,6 @@ OncoExperiment <- function(
 
 #' Show method for OncoExperiment objects.
 #' This method defines how OncoExperiment objects are displayed when printed.
-#' @example print(OncoExperiment())
 setMethod("show", "OncoExperiment", function(object) {
   cat("An OncoExperiment object\n")
   cat("Project Name:", object@project_name, "\n")

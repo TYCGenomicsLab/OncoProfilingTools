@@ -10,14 +10,14 @@ if (!requireNamespace("pak", quietly = TRUE)) {
   install.packages("pak")
 }
 
-pak::pkg_install("/lustre/home/visium_analysis/OncoProfilingTools-s4", ask=FALSE)
+pak::pkg_install("/lustre/home/visium_analysis/OncoProfilingTools-s4", ask = FALSE)
 
 library(OncoProfilingTools)
 ```
 
 You're now ready to create your first experiment! If you're familiar with the common Seurat library, an `OncoExperiment` is modeled after a `SeuratObject` and behaves similarly. A new blank experiment requires no set arguments!
 ```{r}
-exp <- OncoExperiment(project_name="My experiment!")
+exp <- OncoExperiment(project_name = "My experiment!")
 exp
 ```
 <!-- R Notebook saved outputs: do not edit

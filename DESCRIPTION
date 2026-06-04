@@ -13,7 +13,14 @@ Config/roxygen2/version: 8.0.0
 Config/roxygen2/markdown: true
 RoxygenNote: 8.0.0
 Imports:
-    methods
+    methods,
+    httr2
 Suggests:
     roxygen2
-
+Collate: 
+    'class-OncoAssay.R'
+    'class-ExpressionAssay.R'
+    'class-OncoExperiment.R'
+    'generic-OncoExperiment-load_depmap_assay.R'
+    'internal-OncoExperiment-load_assays.R'
+    'method-OncoExperiment-load_depmap_assay.R'
