@@ -1,0 +1,19 @@
+Package: OncoProfilingTools
+Type: Package
+Title: What the Package Does (Title Case)
+Version: 0.1.0
+Author: Jason LaPierre
+Maintainer: Jason LaPierre <lapierreja@vcu.edu>
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: 
+Encoding: UTF-8
+LazyData: true
+Config/roxygen2/version: 8.0.0
+Config/roxygen2/markdown: true
+RoxygenNote: 8.0.0
+Imports:
+    methods
+Suggests:
+    roxygen2
+
