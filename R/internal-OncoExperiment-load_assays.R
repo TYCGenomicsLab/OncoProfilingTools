@@ -1,20 +1,23 @@
 library(httr2)
 library(tibble)
 
+#' Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns
+#' These are the only files downloaded from DepMap, inferred, and loadable in their assay-specific classes.
+#' @keywords internal
 supported_assays <- tribble(
-  ~assay_type, ~OncoAssay_class, ~filename_pattern,
-  NA, NA, "README.txt", # support downloading README file
-  NA, NA, "Model.csv",
-  NA, NA, "Gene.csv",
-  "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
-  "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv",
-  "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
-  "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenesStranded.csv",
-  NA, NA, ".*_Cell_Line_Meta_Data\\.csv$",
-  NA, NA, ".*_Treatment_Meta_Data\\.csv$",
-  NA, NA, ".*_Extended_Primary_Compound_List\\.csv$",
-  NA, NA, ".*Readme\\txt$",
-  "PRISM", "TreatmentAssay", ".*_Extended_Primary_Data_Matrix\\.csv$"
+  ~release_name_pattern, ~assay_type, ~OncoAssay_class, ~filename_pattern,
+  "DepMap Public 26Q1", NA, NA, "README.txt", # support downloading README file
+  "DepMap Public 26Q1", NA, NA, "Model.csv",
+  "DepMap Public 26Q1", NA, NA, "Gene.csv",
+  "DepMap Public 26Q1", "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
+  "DepMap Public 26Q1", "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv",
+  "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
+  "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenesStranded.csv",
+  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Cell_Line_Meta_Data\\.csv$",
+  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Treatment_Meta_Data\\.csv$",
+  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Extended_Primary_Compound_List\\.csv$",
+  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*Readme\\txt$",
+  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", "TreatmentAssay", ".*_Extended_Primary_Data_Matrix\\.csv$"
 )
 
 #' Entry URL's from the API are not valid download links.
@@ -27,7 +30,7 @@ supported_assays <- tribble(
 #'
 #' @param object An optional OncoExperiment object to store the downloaded assay data. Default is NULL.
 #' @return A data frame of available assay names.
-#' @internal
+#' @keywords internal
 fetch_all_assay_urls <- function(object = NULL) {
   # If object given, check type and see if it is already stored in @metadata
   if (!is.null(object)) {
@@ -69,7 +72,7 @@ fetch_all_assay_urls <- function(object = NULL) {
 #' @param release The DepMap release, e.g. "25Q3"
 #' @param filename The name of the file to download, e.g. "depmap_25Q3_expression.csv"
 #' @return The download URL for the specified file
-#' @internal
+#' @keywords internal
 find_assay_url <- function(release, filename) {
   files <- fetch_all_assay_urls()
 
@@ -86,8 +89,8 @@ find_assay_url <- function(release, filename) {
   matching_row$url[1]
 }
 
-#' @internal
-download_assay <- function(release, filename, url) {
+#' @keywords internal
+download_assay <- function(release, url, filename) {
   if (!nzchar(url)) {
     stop("`url` cannot be empty.")
   }
@@ -100,13 +103,11 @@ download_assay <- function(release, filename, url) {
     stop("`filename` cannot be empty.")
   }
 
-  # Create .cache directory with release subdirectory if it doesn't exist
   cache_dir <- file.path(".cache", release)
   if (!dir.exists(cache_dir)) {
     dir.create(cache_dir, recursive = TRUE)
   }
 
-  # Check if the file already exists in the .cache directory
   cached_file_path <- file.path(cache_dir, filename)
   if (file.exists(cached_file_path)) {
     message(paste("File already exists in cache:", cached_file_path))
@@ -119,16 +120,16 @@ download_assay <- function(release, filename, url) {
     httr2::req_perform()
 
   body_raw <- httr2::resp_body_raw(response)
-  if (grepl("text/html|application/xhtml\\+xml", tolower(httr2::resp_header(response, "content-type")))) {
+  content_type <- tolower(httr2::resp_header(response, "content-type"))
+  if (grepl("text/html|application/xhtml\\+xml", content_type)) {
     stop(paste("Download returned HTML instead of CSV for", filename))
   }
 
   writeBin(body_raw, con = cached_file_path)
 
-  # Check file exists, else throw an error
   if (!file.exists(cached_file_path)) {
     stop(paste("Failed to download file:", cached_file_path))
   }
 
-  return(cached_file_path)
+  cached_file_path
 }

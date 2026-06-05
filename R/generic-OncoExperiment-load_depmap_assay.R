@@ -4,4 +4,4 @@
 
 library(methods)
 
-setGeneric("download_depmap_assays", function(object, ...) standardGeneric("download_depmap_assays"))
+setGeneric("download_assays", function(object, ...) standardGeneric("download_assays"))
