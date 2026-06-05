@@ -1,4 +1,21 @@
 library(httr2)
+library(tibble)
+
+supported_assays <- tribble(
+  ~assay_type, ~OncoAssay_class, ~filename_pattern,
+  NA, NA, "README.txt", # support downloading README file
+  NA, NA, "Model.csv",
+  NA, NA, "Gene.csv",
+  "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
+  "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv",
+  "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
+  "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenesStranded.csv",
+  NA, NA, ".*_Cell_Line_Meta_Data\\.csv$",
+  NA, NA, ".*_Treatment_Meta_Data\\.csv$",
+  NA, NA, ".*_Extended_Primary_Compound_List\\.csv$",
+  NA, NA, ".*Readme\\txt$",
+  "PRISM", "TreatmentAssay", ".*_Extended_Primary_Data_Matrix\\.csv$"
+)
 
 #' Entry URL's from the API are not valid download links.
 #' Instead, we can use them to get a csv table listing all

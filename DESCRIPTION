@@ -14,7 +14,8 @@ Config/roxygen2/markdown: true
 RoxygenNote: 8.0.0
 Imports:
     methods,
-    httr2
+    httr2,
+    tibble
 Suggests:
     roxygen2
 Collate: 
