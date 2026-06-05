@@ -47,6 +47,7 @@ fetch_all_assay_urls <- function(object = NULL) {
   url <- "https://depmap.org/portal/api/download/files"
 
   files <- httr2::request(url) |>
+    httr2::req_user_agent("OncoExperiment R package email authored by lapierreja@vcu.edu") |>
     httr2::req_perform() |>
     # read the response as a CSV file
     httr2::resp_body_string() |>
@@ -115,6 +116,7 @@ download_assay <- function(release, url, filename) {
   }
 
   response <- httr2::request(url) |>
+    httr2::req_user_agent("OncoExperiment R package email authored by lapierreja@vcu.edu") |>
     httr2::req_progress() |>
     httr2::req_retry(max_tries = 3) |>
     httr2::req_perform()
