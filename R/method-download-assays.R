@@ -30,14 +30,17 @@ setMethod("download_assays", "OncoExperiment", function(
   supported_types <- supported_assays |>
     dplyr::filter(is.na(assay_type) | assay_type == .env$assay_type)
 
-  assay_urls <- available_assays |>
-    dplyr::inner_join(
-      supported_types,
-      by = c("release" = "release_name_pattern")
-    ) |>
-    dplyr::filter(grepl(filename_pattern, filename)) |>
-    dplyr::select(release, url, filename) |>
-    dplyr::distinct()
+   assay_urls <- available_assays |>
+     dplyr::inner_join(
+       supported_types,
+       by = c("release" = "release_name_pattern"),
+       relationship = "many-to-many"
+     ) |>
+     dplyr::rowwise() |>
+     dplyr::filter(grepl(filename_pattern, filename)) |>
+     dplyr::ungroup() |>
+     dplyr::select(release, url, filename) |>
+     dplyr::distinct()
 
   if (nrow(assay_urls) == 0) {
     stop(paste("No supported DepMap files found for assay type", assay_type))

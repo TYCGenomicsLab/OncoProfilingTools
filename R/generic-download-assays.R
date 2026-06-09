@@ -4,4 +4,5 @@
 
 library(methods)
 
+#' @export
 setGeneric("download_assays", function(object, ...) standardGeneric("download_assays"))

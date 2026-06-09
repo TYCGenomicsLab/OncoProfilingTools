@@ -1,24 +1,28 @@
 Package: OncoProfilingTools
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Tools for Oncology Profiling Data Analysis
 Version: 0.1.0
-Author: Jason LaPierre
-Maintainer: Jason LaPierre <lapierreja@vcu.edu>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: 
+Authors@R: person("Jason", "LaPierre",
+    email = "lapierreja@vcu.edu",
+    role = c("aut", "cre"))
+Description: Provides S4 classes and methods for managing and analyzing
+    cancer genomic profiling data, with integration to the DepMap project
+    for downloading and organizing oncology assays.
+License: file LICENSE
 Encoding: UTF-8
-LazyData: true
-Config/roxygen2/version: 8.0.0
-Config/roxygen2/markdown: true
-RoxygenNote: 8.0.0
+Depends: R (>= 4.1.0)
 Imports:
     methods,
     httr2,
-    tibble
+    tibble,
+    dplyr
 Suggests:
-    roxygen2
-Collate: 
+    roxygen2,
+    knitr,
+    rmarkdown
+RoxygenNote: 8.0.0
+Config/roxygen2/markdown: true
+Collate:
     'class-OncoAssay.R'
     'class-ExpressionAssay.R'
     'class-OncoExperiment.R'

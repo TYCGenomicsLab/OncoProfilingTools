@@ -1,3 +1,16 @@
+---
+title: "Basic Example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Basic Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
 # Basic Example
 
 
@@ -5,20 +18,25 @@
 
 This package is still under development, so we'll install it locally from source. I recommend the R `pak` package. It's very nice and handles dependencies well.
 Then, you can install the `OncoProfilingTools` package from the local source directory like this:
-```{r}
+```{r, eval = FALSE}
 if (!requireNamespace("pak", quietly = TRUE)) {
   install.packages("pak")
 }
 
-pak::pkg_install("/lustre/home/visium_analysis/OncoProfilingTools-s4", ask = FALSE)
+pak::pkg_install(".", ask = FALSE)
 
 library(OncoProfilingTools)
 ```
 
 You're now ready to create your first experiment! If you're familiar with the common Seurat library, an `OncoExperiment` is modeled after a `SeuratObject` and behaves similarly. A new blank experiment requires no set arguments!
-```{r}
+```{r, eval = FALSE}
 exp <- OncoExperiment(project_name = "My experiment!")
 exp
+```
+
+If you have the required assays downloaded, you can attach them now or download them.
+```{r, eval = FALSE}
+OncoProfilingTools::download_assays(exp, assay_type="Expression")
 ```
 <!-- R Notebook saved outputs: do not edit
 RNOTEBOOK_RMD_STATE_BEGIN

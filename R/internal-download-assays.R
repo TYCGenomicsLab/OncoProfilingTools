@@ -1,3 +1,6 @@
+# Author: Jason LaPierre
+# Virginia Commonwealth University, Katarzyna Tyc Lab
+
 library(httr2)
 library(tibble)
 
@@ -46,12 +49,12 @@ fetch_all_assay_urls <- function(object = NULL) {
 
   url <- "https://depmap.org/portal/api/download/files"
 
-  files <- httr2::request(url) |>
+  response_text <- httr2::request(url) |>
     httr2::req_user_agent("OncoExperiment R package email authored by lapierreja@vcu.edu") |>
     httr2::req_perform() |>
-    # read the response as a CSV file
-    httr2::resp_body_string() |>
-    read.csv(text = _, stringsAsFactors = FALSE)
+    httr2::resp_body_string()
+
+  files <- read.csv(text = response_text, stringsAsFactors = FALSE)
 
   # Extract release, filename, and url as a data frame
   files_df <- data.frame(
@@ -115,6 +118,8 @@ download_assay <- function(release, url, filename) {
     return(cached_file_path)
   }
 
+  message(paste("Downloading", filename))
+
   response <- httr2::request(url) |>
     httr2::req_user_agent("OncoExperiment R package email authored by lapierreja@vcu.edu") |>
     httr2::req_progress() |>
@@ -132,6 +137,8 @@ download_assay <- function(release, url, filename) {
   if (!file.exists(cached_file_path)) {
     stop(paste("Failed to download file:", cached_file_path))
   }
+
+  message(paste("File downloaded and cached at:", cached_file_path))
 
   cached_file_path
 }

@@ -1,2 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^vignettes$
+^\.cache$
+^\.idea$
+\vignettes
+
+^\.github$

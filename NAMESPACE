@@ -2,6 +2,7 @@
 
 export(ExpressionAssay)
 export(OncoExperiment)
+export(download_assays)
 exportClasses(ExpressionAssay)
 exportClasses(OncoAssay)
 exportClasses(OncoExperiment)
