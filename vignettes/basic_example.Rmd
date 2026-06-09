@@ -36,7 +36,7 @@ exp
 
 If you have the required assays downloaded, you can attach them now or download them.
 ```{r, eval = FALSE}
-OncoProfilingTools::download_assays(exp, assay_type="Expression")
+OncoProfilingTools::download_assays(exp, assay_type = "Expression")
 ```
 <!-- R Notebook saved outputs: do not edit
 RNOTEBOOK_RMD_STATE_BEGIN
