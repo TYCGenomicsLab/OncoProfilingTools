@@ -23,8 +23,39 @@ methods::setClass("ExpressionAssay",
   )
 )
 
+#' @keywords internal
+#' Validity method for narrowing data slot to a numeric matrix with row and column names.
+methods::setValidity("ExpressionAssay", function(object) {
+  if (!is.matrix(object@data)) {
+    return("ExpressionAssay `data` must be a matrix.")
+  }
+
+  if (!is.numeric(object@data)) {
+    return("ExpressionAssay `data` must be a numeric matrix.")
+  }
+
+  if (is.null(rownames(object@data))) {
+    return("ExpressionAssay `data` must have row names for samples/models.")
+  }
+
+  if (is.null(colnames(object@data))) {
+    return("ExpressionAssay `data` must have column names for genes/features.")
+  }
+
+  TRUE
+})
+
 #' @export
-ExpressionAssay <- function(data, metadata = list(), row_data = list(), col_data = list(), layers = list(), name = "ExpressionAssay", unit = "TPM", normalized = TRUE) {
+ExpressionAssay <- function(
+  data, metadata = list(), row_data = list(),
+  col_data = list(), layers = list(), name = "ExpressionAssay",
+  unit = "TPM", normalized = TRUE
+) {
+
+  if (is.data.frame(data)) {
+    data <- as.matrix(data)
+  }
+
   new("ExpressionAssay",
     data = data,
     metadata = metadata,

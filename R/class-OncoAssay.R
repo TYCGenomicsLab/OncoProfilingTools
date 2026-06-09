@@ -20,7 +20,7 @@ methods::setClass("OncoAssay",
   contains = "VIRTUAL",
   slots = c(
     metadata = "list",
-    data = "matrix",
+    data = "ANY",
     row_data = "list",
     col_data = "list",
     layers = "list",
