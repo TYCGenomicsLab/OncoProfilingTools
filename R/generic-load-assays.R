@@ -13,8 +13,8 @@ library(methods)
 #' @return An updated OncoExperiment with loaded assays in the @assays slot.
 #' @export
 methods::setGeneric(
-  name="load_assays",
-  def=function(object, assay_type=NULL, path=NULL, ...) {
+  name = "load_assays",
+  def = function(object, assay_type = NULL, path = NULL, ...) {
     if (missing(object)) {
       stop("`object` is required.", call. = FALSE)
     }

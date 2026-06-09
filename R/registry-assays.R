@@ -32,15 +32,13 @@ get_supported_types <- function() {
   registry <- supported_assays[
     !is.na(supported_assays$assay_type) &
       !is.na(supported_assays$OncoAssay_class) &
-      !is.na(supported_assays$loader),
-    ,
+      !is.na(supported_assays$loader), ,
     drop = FALSE
   ]
 
   if (!is.null(assay_type)) {
     registry <- registry[
-      registry$assay_type %in% assay_type,
-      ,
+      registry$assay_type %in% assay_type, ,
       drop = FALSE
     ]
   }

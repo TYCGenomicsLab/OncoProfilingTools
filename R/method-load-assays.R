@@ -16,7 +16,7 @@ library(methods)
 #' @export
 methods::setMethod(
   f = "load_assays",
-  signature = c(object="OncoExperiment"),
+  signature = c(object = "OncoExperiment"),
   definition = function(
     object,
     assay_type = NULL,
@@ -24,7 +24,6 @@ methods::setMethod(
     overwrite = FALSE,
     ...
   ) {
-
     ## ---------------------------------------------------
     ## Input validation via guard clauses
     ## ---------------------------------------------------
@@ -37,7 +36,7 @@ methods::setMethod(
     }
 
     if (length(assay_type) == 0L) {
-        stop("Assay type cannot be an empty string.", call. = FALSE)
+      stop("Assay type cannot be an empty string.", call. = FALSE)
     }
 
     if (is.null(path)) {

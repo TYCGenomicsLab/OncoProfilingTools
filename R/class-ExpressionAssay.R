@@ -51,7 +51,6 @@ ExpressionAssay <- function(
   col_data = list(), layers = list(), name = "ExpressionAssay",
   unit = "TPM", normalized = TRUE
 ) {
-
   if (is.data.frame(data)) {
     data <- as.matrix(data)
   }
