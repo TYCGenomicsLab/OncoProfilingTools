@@ -12,7 +12,5 @@ methods::setMethod(
     name = NULL,
     overwrite = FALSE,
     ...
-  ) {
-    
-  }
+  ) {}
 )

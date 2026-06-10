@@ -68,7 +68,6 @@ load_expression_assay <- function(
   ))
 
 
-
   identifier_cols <- c(
     "SequencingID",
     "ModelConditionID",
@@ -111,9 +110,9 @@ load_expression_assay <- function(
     )
   )
 
-    if (nrow(expression_dt) == 0L) {
-        stop("No data was read from expression assay file.", call. = FALSE)
-    }
+  if (nrow(expression_dt) == 0L) {
+    stop("No data was read from expression assay file.", call. = FALSE)
+  }
 
   message(
     "Successfully read expression assay file with ",

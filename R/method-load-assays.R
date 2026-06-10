@@ -87,17 +87,12 @@ methods::setMethod(
     for (i in seq_len(nrow(resolved_files))) {
       message(sprintf("Loading assay file: %s", resolved_files$filename[i]))
       assay <- .load_assay(
-          path = resolved_files$path[i],
-          filename = resolved_files$filename[i],
-          assay_type = resolved_files$assay_type[i],
-          OncoAssay_class = resolved_files$OncoAssay_class[i],
-          loader = resolved_files$loader[i]
+        path = resolved_files$path[i],
+        filename = resolved_files$filename[i],
+        assay_type = resolved_files$assay_type[i],
+        OncoAssay_class = resolved_files$OncoAssay_class[i],
+        loader = resolved_files$loader[i]
       )
-
-
     }
-
-
-
   }
 )

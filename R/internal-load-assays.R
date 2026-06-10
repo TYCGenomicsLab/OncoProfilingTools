@@ -113,8 +113,7 @@ library(methods)
         grepl(pattern, filename)
       },
       logical(1)
-    ),
-    ,
+    ), ,
     drop = FALSE
   ]
 
@@ -208,8 +207,8 @@ library(methods)
 
   if (!inherits(assay, OncoAssay_class)) {
     stop("Loader `", loader, "` returned class `", class(assay)[1L],
-         "`, but registry expected `", OncoAssay_class, "`.",
-         call. = FALSE
+      "`, but registry expected `", OncoAssay_class, "`.",
+      call. = FALSE
     )
   }
 
