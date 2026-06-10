@@ -13,7 +13,6 @@ supported_assays <- tribble(
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Model.csv", NA,
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Gene.csv", NA,
   "DepMap Public 26Q1", "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv", "load_expression_assay",
-  "DepMap Public 26Q1", "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenesStranded.csv", "load_expression_assay",
   "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv", NA,
   "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenesStranded.csv", NA,
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Cell_Line_Meta_Data\\.csv$", NA,

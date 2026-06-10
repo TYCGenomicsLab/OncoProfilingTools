@@ -93,6 +93,15 @@ methods::setMethod(
         OncoAssay_class = resolved_files$OncoAssay_class[i],
         loader = resolved_files$loader[i]
       )
+
+      object <- add_assay(
+        object = object,
+        assay = assay,
+        overwrite = overwrite
+      )
     }
+
+    validObject(object)
+    object
   }
 )

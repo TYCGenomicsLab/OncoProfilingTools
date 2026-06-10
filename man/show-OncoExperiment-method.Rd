@@ -2,12 +2,16 @@
 % Please edit documentation in R/class-OncoExperiment.R
 \name{show,OncoExperiment-method}
 \alias{show,OncoExperiment-method}
-\title{Show method for OncoExperiment objects.
-This method defines how OncoExperiment objects are displayed when printed.}
+\title{Show an OncoExperiment object}
 \usage{
 \S4method{show}{OncoExperiment}(object)
 }
+\arguments{
+\item{object}{An `OncoExperiment` object.}
+}
+\value{
+Invisibly returns `NULL`.
+}
 \description{
-Show method for OncoExperiment objects.
-This method defines how OncoExperiment objects are displayed when printed.
+Show an OncoExperiment object
 }

@@ -62,10 +62,66 @@ OncoExperiment <- function(
   )
 }
 
-#' Show method for OncoExperiment objects.
-#' This method defines how OncoExperiment objects are displayed when printed.
-setMethod("show", "OncoExperiment", function(object) {
-  cat("An OncoExperiment object\n")
-  cat("Project Name:", object@project_name, "\n")
-  cat("Version:", object@version, "\n")
-})
+#' Show an OncoExperiment object
+#'
+#' @param object An `OncoExperiment` object.
+#'
+#' @return Invisibly returns `NULL`.
+#' @export
+methods::setMethod(
+  f = "show",
+  signature = signature(object = "OncoExperiment"),
+  definition = function(object) {
+    cat("An OncoExperiment object\n")
+
+    if ("project_name" %in% slotNames(object)) {
+      cat("Project Name:", object@project_name, "\n")
+    }
+
+    if ("version" %in% slotNames(object)) {
+      cat("Version:", object@version, "\n")
+    }
+
+    assay_names <- names(object@assays)
+
+    if (is.null(assay_names) || length(assay_names) == 0L) {
+      cat("Assays: none\n")
+      return(invisible(NULL))
+    }
+
+    cat("Assays:", paste(assay_names, collapse = ", "), "\n")
+
+    assay_summary <- lapply(assay_names, function(assay_name) {
+      assay <- object@assays[[assay_name]]
+
+      data_dim <- tryCatch(
+        dim(assay@data),
+        error = function(e) NULL
+      )
+
+      dim_text <- if (is.null(data_dim)) {
+        "unknown"
+      } else {
+        paste(data_dim, collapse = " x ")
+      }
+
+      data_class <- class(assay@data)[1L]
+
+      data.frame(
+        assay = assay_name,
+        class = class(assay)[1L],
+        data_class = data_class,
+        dim = dim_text,
+        stringsAsFactors = FALSE
+      )
+    })
+
+    assay_summary <- do.call(rbind, assay_summary)
+
+    cat("\nAssay summary:\n")
+    print(assay_summary, row.names = FALSE)
+
+    invisible(NULL)
+  }
+)
+

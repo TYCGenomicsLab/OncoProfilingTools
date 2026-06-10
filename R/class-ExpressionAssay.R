@@ -66,3 +66,38 @@ ExpressionAssay <- function(
     normalized = normalized
   )
 }
+
+#' Show an ExpressionAssay object
+#'
+#' @param object An `ExpressionAssay` object.
+#'
+#' @return Invisibly returns `NULL`.
+#' @export
+methods::setMethod(
+  f = "show",
+  signature = signature(object = "ExpressionAssay"),
+  definition = function(object) {
+    cat("An ExpressionAssay object\n")
+    cat("Name:", object@name, "\n")
+    cat("Unit:", object@unit, "\n")
+    cat("Normalized:", object@normalized, "\n")
+
+    data_dim <- dim(object@data)
+
+    cat("Data:", paste(data_dim, collapse = " x "), class(object@data)[1L], "\n")
+
+    if (!is.null(rownames(object@data))) {
+      cat("Rows:", length(rownames(object@data)), "models/samples\n")
+    }
+
+    if (!is.null(colnames(object@data))) {
+      cat("Columns:", length(colnames(object@data)), "features\n")
+    }
+
+    if (length(object@metadata) > 0L) {
+      cat("Metadata fields:", paste(names(object@metadata), collapse = ", "), "\n")
+    }
+
+    invisible(NULL)
+  }
+)
