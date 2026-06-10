@@ -1,3 +1,7 @@
+# Author: Jason LaPierre
+# Virginia Commonwealth University, Katarzyna Tyc Lab
+
+library(methods)
 library(tibble)
 
 #' Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns

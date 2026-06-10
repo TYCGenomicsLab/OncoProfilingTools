@@ -72,8 +72,32 @@ methods::setMethod(
     }
 
 
-    files_to_load <- .resolve_files_to_load(path, assay_type)
+    resolved_files <- .resolve_files_to_load(path, assay_type) # returns a tibble subset of the registry
 
-    message(files_to_load)
+    if (!inherits(resolved_files, "data.frame") || nrow(resolved_files) == 0L) {
+      stop(
+        "No loadable assay files were resolved.",
+        call. = FALSE
+      )
+    }
+
+    ## ---------------------------------------------------
+    ## Load each resolved file
+    ## ---------------------------------------------------
+    for (i in seq_len(nrow(resolved_files))) {
+      message(sprintf("Loading assay file: %s", resolved_files$filename[i]))
+      assay <- .load_assay(
+          path = resolved_files$path[i],
+          filename = resolved_files$filename[i],
+          assay_type = resolved_files$assay_type[i],
+          OncoAssay_class = resolved_files$OncoAssay_class[i],
+          loader = resolved_files$loader[i]
+      )
+
+
+    }
+
+
+
   }
 )
