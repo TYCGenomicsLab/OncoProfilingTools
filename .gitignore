@@ -2,3 +2,8 @@
 .cache
 .cache/*
 /.cache
+.idea
+./idea
+.idea/*
+.DS_Store
+.Rhistory
