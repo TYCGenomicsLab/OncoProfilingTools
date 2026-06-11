@@ -6,19 +6,11 @@ vignette: >
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
-
-```{r setup, include = FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(eval = FALSE)
 ```
-
-# Basic Example
-
-
-## Installation
-
-This package is still under development, so we'll install it locally from source. I recommend the R `pak` package. It's very nice and handles dependencies well.
-Then, you can install the `OncoProfilingTools` package from the local source directory like this:
-```{r, eval = FALSE}
+# Basic Example ## Installation This package is still under development, so we'll install it locally from source. I recommend the R `pak` package. It's becoming the default, is very nice, and handles dependencies well. Then, you can install the `OncoProfilingTools` package from the local source directory like this:
+```{r eval=FALSE}
 if (!requireNamespace("pak", quietly = TRUE)) {
   install.packages("pak")
 }
@@ -29,48 +21,23 @@ library(OncoProfilingTools)
 ```
 
 You're now ready to create your first experiment! If you're familiar with the common Seurat library, an `OncoExperiment` is modeled after a `SeuratObject` and behaves similarly. A new blank experiment requires no set arguments!
-```{r, eval = FALSE}
+```{r eval=FALSE}
 exp <- OncoExperiment(project_name = "My experiment!")
 exp
 ```
 
 If you have the required assays downloaded, you can attach them now or download them.
-```{r, eval = FALSE}
+```{r eval=FALSE}
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
 
 OncoProfilingTools::load_assays(exp, "Expression")
 ```
-
-```{r, eval = FALSE}
+```{r eval=FALSE}
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
 pak::pkg_install(".", ask = FALSE)
 library(OncoProfilingTools)
 exp <- OncoExperiment(project_name = "My experiment!")
 exp
-exp <- OncoProfilingTools::load_assays(exp, "Expression")
+exp <- OncoProfilingTools::load_assays(exp, AssayTypes$Expression)
+exp <- OncoProfilingTools::load_assays(exp, AssayTypes$ProteinExpression)
 ```
-
-<!-- R Notebook saved outputs: do not edit
-RNOTEBOOK_RMD_STATE_BEGIN
-eyJ2ZXJzaW9uIjoyLCJjb2RlQ2VsbFN0YXRlcyI6W3siZmluZ2VycHJpbnQiOiJ7XCJsYW5ndWFnZVwiOlwiclwiLFwiY29kZVwi
-OlwiaWYgKCFyZXF1aXJlTmFtZXNwYWNlKFxcXCJwYWtcXFwiLCBxdWlldGx5ID0gVFJVRSkpIHtcXG4gIGluc3RhbGwucGFja2Fn
-ZXMoXFxcInBha1xcXCIpXFxufVxcblxcbnBhazo6cGtnX2luc3RhbGwoXFxcIi9sdXN0cmUvaG9tZS92aXNpdW1fYW5hbHlzaXMv
-T25jb1Byb2ZpbGluZ1Rvb2xzLXM0XFxcIiwgYXNrPUZBTFNFKVxcblxcbmxpYnJhcnkoT25jb1Byb2ZpbGluZ1Rvb2xzKVwiLFwi
-b3B0aW9uc1wiOnt9fSIsInJlc3VsdCI6eyJ0eXBlIjoicmVzdWx0IiwiY2h1bmtfaWQiOiJjaHVuay0xIiwic291cmNlX2NvZGUi
-OiJpZiAoIXJlcXVpcmVOYW1lc3BhY2UoXCJwYWtcIiwgcXVpZXRseSA9IFRSVUUpKSB7XG4gIGluc3RhbGwucGFja2FnZXMoXCJw
-YWtcIilcbn1cblxucGFrOjpwa2dfaW5zdGFsbChcIi9sdXN0cmUvaG9tZS92aXNpdW1fYW5hbHlzaXMvT25jb1Byb2ZpbGluZ1Rv
-b2xzLXM0XCIsIGFzaz1GQUxTRSlcblxubGlicmFyeShPbmNvUHJvZmlsaW5nVG9vbHMpIiwiY29uc29sZV9zZWdtZW50cyI6W3si
-Y29kZSI6ImlmICghcmVxdWlyZU5hbWVzcGFjZShcInBha1wiLCBxdWlldGx5ID0gVFJVRSkpIHtcbiAgaW5zdGFsbC5wYWNrYWdl
-cyhcInBha1wiKVxufVxuXG5wYWs6OnBrZ19pbnN0YWxsKFwiL2x1c3RyZS9ob21lL3Zpc2l1bV9hbmFseXNpcy9PbmNvUHJvZmls
-aW5nVG9vbHMtczRcIiwgYXNrPUZBTFNFKVxuXG5saWJyYXJ5KE9uY29Qcm9maWxpbmdUb29scykiLCJvdXRwdXQiOiIifV0sImNv
-bnNvbGUiOiIiLCJzdGRvdXQiOiIiLCJzdGRlcnIiOiIiLCJwbG90cyI6W10sInBsb3RzX2h0bWwiOltdLCJkYXRhZnJhbWVzIjpb
-XSwiZXJyb3IiOiJSIHByb2Nlc3MgZXhpdGVkIChjb2RlPTEpIn19LHsiZmluZ2VycHJpbnQiOiJ7XCJsYW5ndWFnZVwiOlwiclwi
-LFwiY29kZVwiOlwiZXhwIDwtIE9uY29FeHBlcmltZW50KHByb2plY3RfbmFtZT1cXFwiTXkgZXhwZXJpbWVudCFcXFwiKVxcbmV4
-cFwiLFwib3B0aW9uc1wiOnt9fSIsInJlc3VsdCI6eyJ0eXBlIjoicmVzdWx0IiwiY2h1bmtfaWQiOiJjaHVuay0zIiwic291cmNl
-X2NvZGUiOiJleHAgPC0gT25jb0V4cGVyaW1lbnQocHJvamVjdF9uYW1lPVwiTXkgZXhwZXJpbWVudCFcIilcbmV4cCIsImNvbnNv
-bGVfc2VnbWVudHMiOlt7ImNvZGUiOiJleHAgPC0gT25jb0V4cGVyaW1lbnQocHJvamVjdF9uYW1lPVwiTXkgZXhwZXJpbWVudCFc
-IilcbmV4cCIsIm91dHB1dCI6IiJ9XSwiY29uc29sZSI6IiIsInN0ZG91dCI6IiIsInN0ZGVyciI6IiIsInBsb3RzIjpbXSwicGxv
-dHNfaHRtbCI6W10sImRhdGFmcmFtZXMiOltdLCJlcnJvciI6IlIgcHJvY2VzcyBleGl0ZWQgKGNvZGU9MSkifX1dLCJjb2RlQ2Vs
-bFJlc3VsdHMiOltdfQ==
-RNOTEBOOK_RMD_STATE_END
--->

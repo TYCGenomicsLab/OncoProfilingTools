@@ -3,6 +3,7 @@
 
 library(methods)
 library(tibble)
+library(enumr)
 
 #' Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns
 #' These are the only files downloaded from DepMap, inferred, and loadable in their assay-specific classes.
@@ -13,7 +14,7 @@ supported_assays <- tribble(
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Model.csv", NA,
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Gene.csv", NA,
   "DepMap Public 26Q1", "Expression", "ExpressionAssay", "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv", "load_expression_assay",
-  "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv", NA,
+  "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv", "load_protein_expression_assay",
   "DepMap Public 26Q1", "Protein Expression", "ProteinExpressionAssay", "OmicsExpressionTPMLogp1HumanProteinCodingGenesStranded.csv", NA,
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Cell_Line_Meta_Data\\.csv$", NA,
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Treatment_Meta_Data\\.csv$", NA,
@@ -48,3 +49,18 @@ get_supported_types <- function() {
 
   registry
 }
+
+#' An enumeration of suppported assay types. 
+#' Helpful for intelligent code completion and to avoid typos in assay type strings.
+#'
+#' Curious what types are available? Just print `AssayTypes`.
+#' @examples
+#' AssayTypes$Expression
+#' AssayTypes$ProteinExpression
+#' @export
+AssayTypes <- enumr::enum( # nolint
+  ExpressionMetadata = "ExpressionMetadata",
+  Expression = "Expression",
+  ProteinExpression = "Protein Expression",
+  PRISM = "PRISM"
+)

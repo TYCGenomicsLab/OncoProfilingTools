@@ -16,7 +16,9 @@ Imports:
     httr2,
     tibble,
     dplyr,
-    data.table
+    data.table,
+Remotes:
+    ElianHugh/enumr@main
 Suggests:
     roxygen2,
     knitr,
@@ -28,6 +30,7 @@ Collate:
     'accessors-OncoExperiment.R'
     'class-OncoAssay.R'
     'class-ExpressionAssay.R'
+    'class-ProteinExpressionAssay.R'
     'generic-add-assay.R'
     'generic-download-assays.R'
     'generic-load-assays.R'
@@ -38,3 +41,4 @@ Collate:
     'registry-assays.R'
     'method-load-assays.R'
     'method-load-expression-assay.R'
+    'method-load-protein-expression-assay.R'
