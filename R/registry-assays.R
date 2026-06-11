@@ -50,7 +50,7 @@ get_supported_types <- function() {
   registry
 }
 
-#' An enumeration of suppported assay types. 
+#' An enumeration of suppported assay types.
 #' Helpful for intelligent code completion and to avoid typos in assay type strings.
 #'
 #' Curious what types are available? Just print `AssayTypes`.
