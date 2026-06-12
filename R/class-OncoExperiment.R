@@ -47,7 +47,7 @@ methods::setClass(
 #'
 #' @examples
 #' experiment <- OncoExperiment()
-#' 
+#'
 #' @name OncoExperiment
 #'
 #' @export
