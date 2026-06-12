@@ -36,8 +36,10 @@ OncoProfilingTools::load_assays(exp, "Expression")
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
 pak::pkg_install(".", ask = FALSE)
 library(OncoProfilingTools)
+
+
 exp <- OncoExperiment(project_name = "My experiment!")
+       download_assays(exp, AssayTypes$Expression)
+exp <- load_assays(exp, AssayTypes$Expression)
 exp
-exp <- OncoProfilingTools::load_assays(exp, AssayTypes$Expression)
-exp <- OncoProfilingTools::load_assays(exp, AssayTypes$ProteinExpression)
 ```
