@@ -30,10 +30,8 @@ Suggests:
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
 Collate:
-    'class-OncoExperiment.R'
-    'accessors-OncoExperiment.R'
     'class-ExpressionAssay.R'
-    'class-OncoAssay.R'
+    'class-OncoExperiment.R'
     'class-ProteinExpressionAssay.R'
     'generic-add-assay.R'
     'generic-download-assays.R'
