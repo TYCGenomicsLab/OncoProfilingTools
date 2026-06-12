@@ -2,7 +2,7 @@
 % Please edit documentation in R/method-load-protein-expression-assay.R
 \name{load_protein_expression_assay}
 \alias{load_protein_expression_assay}
-\title{Load a DepMap protein expression assay}
+\title{Load a DepMap protein-coding gene expression assay}
 \usage{
 load_protein_expression_assay(
   path,
@@ -10,32 +10,34 @@ load_protein_expression_assay(
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
-  feature_type = "transcript"
+  feature_type = "protein_coding_gene"
 )
 }
 \arguments{
 \item{path}{A character string specifying the path to the expression assay file.}
 
-\item{assay_name}{A character string specifying the assay name.}
+\item{assay_name}{A character string specifying the assay name used in metadata.}
 
 \item{unit}{A character string specifying the expression unit.}
 
 \item{normalized}{A logical value indicating whether the expression data are normalized.}
 
 \item{id_col}{A character string specifying the expression file column to use
-as row names.}
+as model/sample identifiers.}
 
 \item{feature_type}{A character string describing the expression feature type.}
 }
 \value{
-An `ExpressionAssay`, which inherits from `OncoAssay`.
+A `ProteinExpressionAssay`, which inherits from
+  `SummarizedExperiment`.
 }
 \description{
-Loads a DepMap expression file into an `ProteinExpressionAssay`.
+Loads a DepMap protein-coding gene expression file into a
+`ProteinExpressionAssay`.
 }
 \details{
-The expression matrix is filtered to default model entries and stored as a
-numeric matrix with `ModelID` values as row names and expression features as
-columns. Metadata from `Model.csv` is not loaded here.
+The DepMap expression file is read, filtered to default model entries, and
+converted into a Bioconductor-style expression matrix with features as rows
+and models as columns. Metadata from `Model.csv` is not loaded here.
 }
 \keyword{internal}

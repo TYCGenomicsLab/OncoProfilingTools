@@ -3,34 +3,31 @@
 \docType{class}
 \name{OncoExperiment-class}
 \alias{OncoExperiment-class}
-\title{OncoExperiment S4 class definition
-This class is designed to hold all relevant data and results for an oncology experiment,
-including assays, models, graphs, and metadata.}
+\title{OncoExperiment S4 class definition}
 \value{
-An object of class OncoExperiment
+An object of class `OncoExperiment`.
 }
 \description{
-OncoExperiment S4 class definition
-This class is designed to hold all relevant data and results for an oncology experiment,
-including assays, models, graphs, and metadata.
+`OncoExperiment` is a `MultiAssayExperiment` subclass for oncology profiling
+projects.
+}
+\details{
+It stores multiple assay datasets, such as bulk expression, PRISM drug
+response, mutation data, copy number data, and single-cell experiments, using
+the standard Bioconductor `MultiAssayExperiment` infrastructure.
+
+Additional oncology-specific results, such as fitted models and graphs, are
+stored in dedicated slots.
 }
 \section{Slots}{
 
 \describe{
-\item{\code{Optional}}{project_name A character string representing the name of the project.}
+\item{\code{project_name}}{A character string representing the project name.}
 
-\item{\code{version}}{A character string representing the version of the package.}
+\item{\code{version}}{A character string representing the package/object version.}
 
-\item{\code{assays}}{A list of OncoAssay objects, such as gene expression matrices or other experimental data.}
+\item{\code{models}}{A list of fitted models, predictions, or other analytical results.}
 
-\item{\code{models}}{A list of OncoModel objects, which may include fitted models, predictions, or other analytical results.}
-
-\item{\code{graphs}}{A list of OncoGraph objects, which may include ggplot2 objects or other visualizations related to the experiment.}
-
-\item{\code{metadata}}{A list of metadata information, such as sample annotations, experimental conditions, or other relevant information.}
+\item{\code{graphs}}{A list of plots or graph objects related to the experiment.}
 }}
 
-\examples{
-# Create an empty OncoExperiment object
-experiment <- OncoExperiment(project_name = "My Oncology Experiment")
-}

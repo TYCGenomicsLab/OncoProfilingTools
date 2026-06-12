@@ -2,42 +2,24 @@
 % Please edit documentation in R/class-OncoExperiment.R
 \name{OncoExperiment}
 \alias{OncoExperiment}
-\title{OncoExperiment constructor function
-This function creates a new OncoExperiment object with the specified project name, assays,
-models, graphs, and metadata. The version is set to "0.1.0" by default.
-This class is designed to hold all relevant data and results for an oncology experiment,
-including assays, models, graphs, and metadata. You should not need to define any slots for a blank experiment.}
+\title{Create an empty OncoExperiment object}
 \usage{
-OncoExperiment(
-  project_name = "OncoExperiment Project",
-  assays = list(),
-  models = list(),
-  graphs = list(),
-  metadata = list()
-)
+OncoExperiment(project_name = "OncoExperiment Project")
 }
 \arguments{
-\item{project_name}{A character string representing the name of the project. Default is "OncoExperiment Project".}
-
-\item{assays}{A list of OncoAssay objects, such as gene expression matrices or other experimental data. Default is an empty list.}
-
-\item{models}{A list of OncoModel objects, which may include fitted models, predictions, or other analytical results. Default is an empty list.}
-
-\item{graphs}{A list of OncoGraph objects, which may include ggplot2 objects or other visualizations related to the experiment. Default is an empty list.}
-
-\item{metadata}{A list of metadata information, such as sample annotations, experimental conditions, or other relevant information. Default is an empty list.}
+\item{project_name}{A character string representing the project name.}
 }
 \value{
-An object of class OncoExperiment
+An empty object of class `OncoExperiment`.
 }
 \description{
-OncoExperiment constructor function
-This function creates a new OncoExperiment object with the specified project name, assays,
-models, graphs, and metadata. The version is set to "0.1.0" by default.
-This class is designed to hold all relevant data and results for an oncology experiment,
-including assays, models, graphs, and metadata. You should not need to define any slots for a blank experiment.
+Creates an empty oncology-focused `MultiAssayExperiment` subclass.
+}
+\details{
+Assays and metadata should be added after construction using package helper
+functions such as `load_assays()` and `add_assay()`.
 }
 \examples{
-# Create an empty OncoExperiment object with default values
 experiment <- OncoExperiment()
+
 }

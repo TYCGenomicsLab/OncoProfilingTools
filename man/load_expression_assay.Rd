@@ -16,26 +16,26 @@ load_expression_assay(
 \arguments{
 \item{path}{A character string specifying the path to the expression assay file.}
 
-\item{assay_name}{A character string specifying the assay name.}
+\item{assay_name}{A character string specifying the assay name used in metadata.}
 
 \item{unit}{A character string specifying the expression unit.}
 
 \item{normalized}{A logical value indicating whether the expression data are normalized.}
 
 \item{id_col}{A character string specifying the expression file column to use
-as row names.}
+as model/sample identifiers.}
 
 \item{feature_type}{A character string describing the expression feature type.}
 }
 \value{
-An `ExpressionAssay`, which inherits from `OncoAssay`.
+An `ExpressionAssay`, which inherits from `SummarizedExperiment`.
 }
 \description{
 Loads a DepMap expression file into an `ExpressionAssay`.
 }
 \details{
-The expression matrix is filtered to default model entries and stored as a
-numeric matrix with `ModelID` values as row names and expression features as
-columns. Metadata from `Model.csv` is not loaded here.
+The DepMap expression file is read, filtered to default model entries, and
+converted into a Bioconductor-style expression matrix with features as rows
+and models as columns. Metadata from `Model.csv` is not loaded here.
 }
 \keyword{internal}

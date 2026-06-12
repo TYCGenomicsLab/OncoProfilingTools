@@ -4,68 +4,84 @@
 library(methods)
 
 #' OncoExperiment S4 class definition
-#' This class is designed to hold all relevant data and results for an oncology experiment,
-#' including assays, models, graphs, and metadata.
-#' @slot Optional project_name A character string representing the name of the project.
-#' @slot version A character string representing the version of the package.
-#' @slot assays A list of OncoAssay objects, such as gene expression matrices or other experimental data.
-#' @slot models A list of OncoModel objects, which may include fitted models, predictions, or other analytical results.
-#' @slot graphs A list of OncoGraph objects, which may include ggplot2 objects or other visualizations related to the experiment.
-#' @slot metadata A list of metadata information, such as sample annotations, experimental conditions, or other relevant information.
-#' @return An object of class OncoExperiment
-#' @examples
-#' # Create an empty OncoExperiment object
-#' experiment <- OncoExperiment(project_name = "My Oncology Experiment")
+#'
+#' `OncoExperiment` is a `MultiAssayExperiment` subclass for oncology profiling
+#' projects.
+#'
+#' It stores multiple assay datasets, such as bulk expression, PRISM drug
+#' response, mutation data, copy number data, and single-cell experiments, using
+#' the standard Bioconductor `MultiAssayExperiment` infrastructure.
+#'
+#' Additional oncology-specific results, such as fitted models and graphs, are
+#' stored in dedicated slots.
+#'
+#' @slot project_name A character string representing the project name.
+#' @slot version A character string representing the package/object version.
+#' @slot models A list of fitted models, predictions, or other analytical results.
+#' @slot graphs A list of plots or graph objects related to the experiment.
+#'
+#' @return An object of class `OncoExperiment`.
+#' @importClassesFrom MultiAssayExperiment MultiAssayExperiment
 #' @export
-methods::setClass("OncoExperiment",
+methods::setClass(
+  "OncoExperiment",
+  contains = "MultiAssayExperiment",
   slots = c(
     project_name = "character",
     version = "character",
-    assays = "list",
     models = "list",
-    graphs = "list",
-    metadata = "list"
+    graphs = "list"
   )
 )
 
-#' OncoExperiment constructor function
-#' This function creates a new OncoExperiment object with the specified project name, assays,
-#' models, graphs, and metadata. The version is set to "0.1.0" by default.
-#' This class is designed to hold all relevant data and results for an oncology experiment,
-#' including assays, models, graphs, and metadata. You should not need to define any slots for a blank experiment.
-#' @param project_name A character string representing the name of the project. Default is "OncoExperiment Project".
-#' @param assays A list of OncoAssay objects, such as gene expression matrices or other experimental data. Default is an empty list.
-#' @param models A list of OncoModel objects, which may include fitted models, predictions, or other analytical results. Default is an empty list.
-#' @param graphs A list of OncoGraph objects, which may include ggplot2 objects or other visualizations related to the experiment. Default is an empty list.
-#' @param metadata A list of metadata information, such as sample annotations, experimental conditions, or other relevant information. Default is an empty list.
-#' @return An object of class OncoExperiment
+#' Create an empty OncoExperiment object
+#'
+#' Creates an empty oncology-focused `MultiAssayExperiment` subclass.
+#'
+#' Assays and metadata should be added after construction using package helper
+#' functions such as `load_assays()` and `add_assay()`.
+#'
+#' @param project_name A character string representing the project name.
+#'
+#' @return An empty object of class `OncoExperiment`.
+#'
 #' @examples
-#' # Create an empty OncoExperiment object with default values
 #' experiment <- OncoExperiment()
+#' 
+#' @name OncoExperiment
+#'
 #' @export
 OncoExperiment <- function(
-  project_name = "OncoExperiment Project",
-  assays = list(),
-  models = list(),
-  graphs = list(),
-  metadata = list()
+  project_name = "OncoExperiment Project"
 ) {
-  # TODO: add validation checks for input parameters once sub-classes are defined
+  if (!is.character(project_name) || length(project_name) != 1L || is.na(project_name) || !nzchar(project_name)) {
+    stop("`project_name` must be a single non-empty character string.", call. = FALSE)
+  }
 
-  methods::new("OncoExperiment",
-    project_name = project_name,
-    version = "0.1.0",
-    assays = assays,
-    models = models,
-    graphs = graphs,
-    metadata = metadata
+  mae <- MultiAssayExperiment::MultiAssayExperiment(
+    experiments = MultiAssayExperiment::ExperimentList(),
+    metadata = list(
+      project_name = project_name,
+      version = "0.1.0"
+    )
   )
+
+  object <- methods::as(mae, "OncoExperiment")
+
+  object@project_name <- project_name
+  object@version <- "0.1.0"
+  object@models <- list()
+  object@graphs <- list()
+
+  validObject(object)
+
+  object
 }
+
 
 #' Show an OncoExperiment object
 #'
 #' @param object An `OncoExperiment` object.
-#'
 #' @return Invisibly returns `NULL`.
 #' @export
 methods::setMethod(
@@ -73,29 +89,24 @@ methods::setMethod(
   signature = signature(object = "OncoExperiment"),
   definition = function(object) {
     cat("An OncoExperiment object\n")
+    cat("Project Name:", object@project_name, "\n")
+    cat("Version:", object@version, "\n")
 
-    if ("project_name" %in% slotNames(object)) {
-      cat("Project Name:", object@project_name, "\n")
-    }
+    experiments <- MultiAssayExperiment::experiments(object)
+    experiment_names <- names(experiments)
 
-    if ("version" %in% slotNames(object)) {
-      cat("Version:", object@version, "\n")
-    }
-
-    assay_names <- names(object@assays)
-
-    if (is.null(assay_names) || length(assay_names) == 0L) {
-      cat("Assays: none\n")
+    if (is.null(experiment_names) || length(experiment_names) == 0L) {
+      cat("Experiments: none\n")
       return(invisible(NULL))
     }
 
-    cat("Assays:", paste(assay_names, collapse = ", "), "\n")
+    cat("Experiments:", paste(experiment_names, collapse = ", "), "\n")
 
-    assay_summary <- lapply(assay_names, function(assay_name) {
-      assay <- object@assays[[assay_name]]
+    experiment_summary <- lapply(experiment_names, function(experiment_name) {
+      experiment <- experiments[[experiment_name]]
 
       data_dim <- tryCatch(
-        dim(assay@data),
+        dim(experiment),
         error = function(e) NULL
       )
 
@@ -105,21 +116,26 @@ methods::setMethod(
         paste(data_dim, collapse = " x ")
       }
 
-      data_class <- class(assay@data)[1L]
-
       data.frame(
-        assay = assay_name,
-        class = class(assay)[1L],
-        data_class = data_class,
+        experiment = experiment_name,
+        class = class(experiment)[1L],
         dim = dim_text,
         stringsAsFactors = FALSE
       )
     })
 
-    assay_summary <- do.call(rbind, assay_summary)
+    experiment_summary <- do.call(rbind, experiment_summary)
 
-    cat("\nAssay summary:\n")
-    print(assay_summary, row.names = FALSE)
+    cat("\nExperiment summary:\n")
+    print(experiment_summary, row.names = FALSE)
+
+    if (length(object@models) > 0L) {
+      cat("\nModels:", paste(names(object@models), collapse = ", "), "\n")
+    }
+
+    if (length(object@graphs) > 0L) {
+      cat("Graphs:", paste(names(object@graphs), collapse = ", "), "\n")
+    }
 
     invisible(NULL)
   }

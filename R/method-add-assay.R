@@ -1,25 +1,20 @@
-# Author: Jason LaPierre
-# Virginia Commonwealth University, Katarzyna Tyc Lab
-
-library(methods)
-
-#' Add an OncoAssay to an OncoExperiment
+#' Add an assay experiment to an OncoExperiment
 #'
-#' Adds an object inheriting from `OncoAssay` to the `assays` slot of an
-#' `OncoExperiment`.
+#' Adds a named assay experiment to the `experiments()` of an `OncoExperiment`.
 #'
 #' @param object An `OncoExperiment` object.
-#' @param assay An object inheriting from `OncoAssay`.
-#' @param name Optional character string specifying the assay name. If `NULL`,
-#'   `assay@name` is used.
+#' @param assay An assay object, such as a `SummarizedExperiment`,
+#'   `ExpressionAssay`, or `SingleCellExperiment`.
+#' @param name A single character string specifying the experiment name.
 #' @param overwrite Logical value indicating whether to overwrite an existing
-#'   assay with the same name.
+#'   experiment with the same name.
 #' @param ... Additional arguments. Currently unused.
+#'
 #' @return The updated `OncoExperiment` object.
 #' @export
 methods::setMethod(
   f = "add_assay",
-  signature = c(object = "OncoExperiment", assay = "OncoAssay"),
+  signature = c(object = "OncoExperiment", assay = "SummarizedExperiment"),
   definition = function(
     object,
     assay,
@@ -35,58 +30,58 @@ methods::setMethod(
       stop("`overwrite` must be TRUE or FALSE.", call. = FALSE)
     }
 
+    if (is.null(name) || !is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
+      stop("`name` must be a single non-empty character string.", call. = FALSE)
+    }
+
     validObject(assay)
 
-    assay_name <- if (is.null(name)) {
-      assay@name
-    } else {
-      name
-    }
-
-    if (!is.character(assay_name) || length(assay_name) != 1L || is.na(assay_name) || !nzchar(assay_name)) {
-      stop(
-        "`name` must be NULL or a single non-empty character string.",
-        call. = FALSE
-      )
-    }
-
     ## ---------------------------------------------------
-    ## Validate assay container
+    ## Get existing experiments
     ## ---------------------------------------------------
 
-    if (is.null(object@assays)) {
-      object@assays <- list()
+    experiments <- MultiAssayExperiment::experiments(object)
+
+    if (!inherits(experiments, "ExperimentList")) {
+      experiments <- MultiAssayExperiment::ExperimentList(experiments)
     }
 
-    if (!is.list(object@assays)) {
-      stop("`object@assays` must be a list.", call. = FALSE)
-    }
-
-    ## ---------------------------------------------------
-    ## Prevent accidental overwrite
-    ## ---------------------------------------------------
-
-    if (assay_name %in% names(object@assays) && !isTRUE(overwrite)) {
+    if (name %in% names(experiments) && !isTRUE(overwrite)) {
       stop(
         "An assay named `",
-        assay_name,
+        name,
         "` already exists in this OncoExperiment. ",
         "Use `overwrite = TRUE` to replace it.",
         call. = FALSE
       )
     }
 
+    experiments[[name]] <- assay
+
     ## ---------------------------------------------------
-    ## Insert assay
+    ## Rebuild MultiAssayExperiment
+    ## ---------------------------------------------------
+    ## This lets MultiAssayExperiment regenerate sampleMap correctly from the
+    ## experiment colnames instead of trying to patch the old empty sampleMap.
+
+    mae <- MultiAssayExperiment::MultiAssayExperiment(
+      experiments = experiments,
+      metadata = S4Vectors::metadata(object)
+    )
+
+    updated <- methods::as(mae, "OncoExperiment")
+
+    ## ---------------------------------------------------
+    ## Preserve OncoExperiment-specific slots
     ## ---------------------------------------------------
 
-    assay@name <- assay_name
-    validObject(assay)
+    updated@project_name <- object@project_name
+    updated@version <- object@version
+    updated@models <- object@models
+    updated@graphs <- object@graphs
 
-    object@assays[[assay_name]] <- assay
+    validObject(updated)
 
-    validObject(object)
-
-    object
+    updated
   }
 )

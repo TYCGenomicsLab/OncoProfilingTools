@@ -2,7 +2,7 @@
 % Please edit documentation in R/registry-assays.R
 \name{AssayTypes}
 \alias{AssayTypes}
-\title{An enumeration of suppported assay types. 
+\title{An enumeration of suppported assay types.
 Helpful for intelligent code completion and to avoid typos in assay type strings.}
 \usage{
 AssayTypes

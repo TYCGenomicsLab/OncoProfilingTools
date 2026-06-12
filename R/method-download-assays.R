@@ -12,7 +12,7 @@ library(dplyr)
 #' @name download_assays
 #' @param object An OncoExperiment object to store the downloaded assay data.
 #' @param assay_type The type of assay to download, e.g. "expression". See supported assay types with `list_supported_assays()`.
-#' @include internal-OncoExperiment-load_assays.R
+#' @include internal-load-assays.R
 #' @return An updated OncoExperiment object with the downloaded assay data stored in the @assays slot.
 #' @export
 setMethod("download_assays", "OncoExperiment", function(

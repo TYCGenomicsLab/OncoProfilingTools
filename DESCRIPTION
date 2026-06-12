@@ -17,6 +17,10 @@ Imports:
     tibble,
     dplyr,
     data.table,
+    S4Vectors,
+    SummarizedExperiment,
+    MultiAssayExperiment,
+    SingleCellExperiment
 Remotes:
     ElianHugh/enumr@main
 Suggests:
@@ -28,8 +32,8 @@ Config/roxygen2/markdown: true
 Collate:
     'class-OncoExperiment.R'
     'accessors-OncoExperiment.R'
-    'class-OncoAssay.R'
     'class-ExpressionAssay.R'
+    'class-OncoAssay.R'
     'class-ProteinExpressionAssay.R'
     'generic-add-assay.R'
     'generic-download-assays.R'
