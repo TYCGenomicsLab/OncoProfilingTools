@@ -38,21 +38,31 @@ setMethod("download_assays", "OncoExperiment", function(
     dplyr::rowwise() |>
     dplyr::filter(grepl(filename_pattern, filename)) |>
     dplyr::ungroup() |>
-    dplyr::select(release, url, filename) |>
+    dplyr::select(release, url, filename, metadata_assay) |>
     dplyr::distinct()
 
   if (nrow(assay_urls) == 0) {
     stop(paste("No supported DepMap files found for assay type", assay_type))
   }
 
-  # Example url: /portal/data_page/?release=DepMap+Public+&file=FILENAME
-  # Substitute the 26Q1 in each URL with the release parameter provided by the user.
-  # It may not neccessarily be 26Q1, but it is the last item in the release parameter
+  ## -----------------------------------------------
+  ## Download each assay file and store in .cache directory
+  ## TODO: implement custom directory option
+  ## -----------------------------------------------
   for (selection in seq_len(nrow(assay_urls))) {
     download_assay(
       assay_urls$release[selection],
       assay_urls$url[selection],
       assay_urls$filename[selection]
     )
+  }
+
+  ## -----------------------------------------------
+  ## If there are associated metadata files, let's
+  ## recur and download those too
+  ## -----------------------------------------------
+  metadata_assays <- assay_urls$metadata_assay |> stats::na.omit() |> unique()
+  for (metadata_assay in metadata_assays) {
+    download_assays(object, assay_type = metadata_assay)
   }
 })
