@@ -19,31 +19,23 @@ supported_assays <- tribble(
   "DepMap Public 26Q1", NA, NA, "README.txt", NA, NA, # support downloading README file
 
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Model.csv", NA, NA,
-
   "DepMap Public 26Q1", "ExpressionMetadata", NA, "Gene.csv", NA, NA,
-
   "DepMap Public 26Q1",
   "Expression",
   "ExpressionAssay",
   "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
   "load_expression_assay",
   "ExpressionMetadata",
-
   "DepMap Public 26Q1",
   "Protein Expression",
   "ProteinExpressionAssay",
   "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
   "load_protein_expression_assay",
   "ExpressionMetadata",
-
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Cell_Line_Meta_Data\\.csv$", NA, NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Treatment_Meta_Data\\.csv$", NA, NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Extended_Primary_Compound_List\\.csv$", NA, NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*Readme\\txt$", NA, NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2",
   "PRISM", "TreatmentAssay",
   ".*_Extended_Primary_Data_Matrix\\.csv$",
