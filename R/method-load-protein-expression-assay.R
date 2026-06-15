@@ -11,10 +11,13 @@ library(data.table)
 #'
 #' The DepMap expression file is read, filtered to default model entries, and
 #' converted into a Bioconductor-style expression matrix with features as rows
-#' and models as columns. Metadata from `Model.csv` is not loaded here.
+#' and models as columns. If `Model.csv` is present beside the assay file, it is
+#' loaded and aligned into `colData()`.
 #'
 #' @param path A character string specifying the path to the expression assay file.
 #' @param assay_name A character string specifying the assay name used in metadata.
+#' @param model_metadata_path Optional path to `Model.csv`. If `NULL`, the loader
+#'   searches for `Model.csv` beside `path`.
 #' @param unit A character string specifying the expression unit.
 #' @param normalized A logical value indicating whether the expression data are normalized.
 #' @param id_col A character string specifying the expression file column to use
@@ -23,14 +26,17 @@ library(data.table)
 #'
 #' @return A `ProteinExpressionAssay`, which inherits from
 #'   `SummarizedExperiment`.
+#'
+#' @include internal-metadata.R
 #' @keywords internal
 load_protein_expression_assay <- function(
-  path,
-  assay_name = "Protein Expression",
-  unit = "log2(TPM+1)",
-  normalized = TRUE,
-  id_col = "ModelID",
-  feature_type = "protein_coding_gene"
+    path,
+    assay_name = "Protein Expression",
+    model_metadata_path = NULL,
+    unit = "log2(TPM+1)",
+    normalized = TRUE,
+    id_col = "ModelID",
+    feature_type = "protein_coding_gene"
 ) {
   ## ---------------------------------------------------
   ## Validate arguments
@@ -42,6 +48,16 @@ load_protein_expression_assay <- function(
 
   if (!file.exists(path)) {
     stop("Protein expression assay file does not exist: ", path, call. = FALSE)
+  }
+
+  if (!is.null(model_metadata_path)) {
+    if (!is.character(model_metadata_path) || length(model_metadata_path) != 1L || is.na(model_metadata_path) || !nzchar(model_metadata_path)) {
+      stop("`model_metadata_path` must be NULL or a single non-empty character string.", call. = FALSE)
+    }
+
+    if (!file.exists(model_metadata_path)) {
+      stop("Model metadata file does not exist: ", model_metadata_path, call. = FALSE)
+    }
   }
 
   if (!is.character(assay_name) || length(assay_name) != 1L || is.na(assay_name) || !nzchar(assay_name)) {
@@ -153,7 +169,6 @@ load_protein_expression_assay <- function(
   ## Separate index columns from expression columns
   ## ---------------------------------------------------
 
-  ## Drop non-biological index columns.
   index_like_cols <- names(expression_df)[
     names(expression_df) == "" |
       names(expression_df) %in% c("V1")
@@ -321,9 +336,16 @@ load_protein_expression_assay <- function(
     row.names = feature_ids
   )
 
-  model_metadata <- S4Vectors::DataFrame(
-    ModelID = model_ids,
-    row.names = model_ids
+  if (is.null(model_metadata_path)) {
+    model_metadata_path <- .find_sidecar_file(
+      path = path,
+      filename = "Model.csv"
+    )
+  }
+
+  model_metadata <- .load_model_metadata(
+    model_metadata_path = model_metadata_path,
+    model_ids = model_ids
   )
 
   ## Add the expression-file index columns to colData if they align.
@@ -395,7 +417,12 @@ load_protein_expression_assay <- function(
       filtered_to_default_model_entries = "IsDefaultEntryForModel" %in% colnames(expression_index),
       n_rows_before_default_filter = n_rows_before_default_filter,
       n_rows_after_default_filter = n_rows_after_default_filter,
-      model_metadata_loaded = FALSE
+      model_metadata_loaded = !is.null(model_metadata_path),
+      model_metadata_file = if (!is.null(model_metadata_path)) {
+        normalizePath(model_metadata_path, winslash = "/", mustWork = TRUE)
+      } else {
+        NA_character_
+      }
     ),
     assay_name = "protein_expression",
     unit = unit,

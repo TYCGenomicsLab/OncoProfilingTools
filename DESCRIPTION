@@ -38,6 +38,7 @@ Collate:
     'generic-load-assays.R'
     'internal-download-assays.R'
     'internal-load-assays.R'
+    'internal-metadata.R'
     'method-add-assay.R'
     'method-download-assays.R'
     'registry-assays.R'

@@ -5,22 +5,41 @@ library(methods)
 library(tibble)
 library(enumr)
 
-#' Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns
-#' These are the only files downloaded from DepMap, inferred, and loadable in their assay-specific classes.
+#' Mapping of supported assay types, their corresponding assay classes, filename patterns, and metadata dependencies.
+#'
+#' These are the only files downloaded from DepMap, inferred, and loadable in
+#' their assay-specific classes.
+#'
 #' @keywords internal
-supported_assays <- tribble(
-  ~release_name_pattern, # Name matching release name in DepMap API portal
-  ~assay_type, # Custom name for the type of assay, e.g. "Expression", "PRISM", etc.
-  ~OncoAssay_class, # The S4 class that the assay will be loaded into, e.g. "ExpressionAssay". NA if not loadable.
-  ~filename_pattern, # Pattern to match the filename of the assay file
-  ~loader, # Function to load the assay file
-  ~metadata_assay, # The type of metadata assay associated with this assay. Will be co- downloaded/loaded
+supported_assays <- tibble::tribble(
+  ~release_name_pattern,
+  ~assay_type,
+  ~OncoAssay_class,
+  ~filename_pattern,
+  ~loader,
+  ~metadata_assay,
 
-  "DepMap Public 26Q1", NA, NA, "README.txt", NA, NA, # support downloading README file
+  ## ---------------------------------------------------
+  ## DepMap Public 26Q1 metadata / auxiliary files
+  ## ---------------------------------------------------
 
-  "DepMap Public 26Q1", "ExpressionMetadata", NA, "Model.csv", NA, NA,
+  "DepMap Public 26Q1",
+  NA,
+  NA,
+  "README.txt",
+  NA,
+  NA,
 
-  "DepMap Public 26Q1", "ExpressionMetadata", NA, "Gene.csv", NA, NA,
+  "DepMap Public 26Q1",
+  "ExpressionMetadata",
+  NA,
+  "Model.csv",
+  NA,
+  NA,
+
+  ## ---------------------------------------------------
+  ## DepMap expression assays
+  ## ---------------------------------------------------
 
   "DepMap Public 26Q1",
   "Expression",
@@ -36,29 +55,70 @@ supported_assays <- tribble(
   "load_protein_expression_assay",
   "ExpressionMetadata",
 
-  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Cell_Line_Meta_Data\\.csv$", NA, NA,
-
-  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Treatment_Meta_Data\\.csv$", NA, NA,
-
-  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*_Extended_Primary_Compound_List\\.csv$", NA, NA,
-
-  "PRISM Primary Repurposing DepMap Public 24Q2", "PRISM", NA, ".*Readme\\txt$", NA, NA,
+  ## ---------------------------------------------------
+  ## PRISM metadata
+  ## ---------------------------------------------------
 
   "PRISM Primary Repurposing DepMap Public 24Q2",
-  "PRISM", "TreatmentAssay",
-  ".*_Extended_Primary_Data_Matrix\\.csv$",
+  "DrugResponseAssayMetadata",
   NA,
-  NA
+  ".*_Cell_Line_Meta_Data\\.csv$",
+  NA,
+  NA,
+
+  "PRISM Primary Repurposing DepMap Public 24Q2",
+  "DrugResponseAssayMetadata",
+  NA,
+  ".*_Treatment_Meta_Data\\.csv$",
+  NA,
+  NA,
+
+  "PRISM Primary Repurposing DepMap Public 24Q2",
+  "DrugResponseAssayMetadata",
+  NA,
+  ".*_Extended_Primary_Compound_List\\.csv$",
+  NA,
+  NA,
+
+  "PRISM Primary Repurposing DepMap Public 24Q2",
+  "DrugResponseAssayMetadata",
+  NA,
+  ".*README\\.txt$",
+  NA,
+  NA,
+
+  ## ---------------------------------------------------
+  ## PRISM response assay
+  ## ---------------------------------------------------
+
+  "PRISM Primary Repurposing DepMap Public 24Q2",
+  "PRISM",
+  "DrugResponseAssay",
+  ".*_Extended_Primary_Data_Matrix\\.csv$",
+  "load_drug_response_assay",
+  "DrugResponseAssayMetadata"
 )
 
-#' A helper function to list all supported assay types that OncoExperiment can load.
-#' @name get_supported_types
+#' List supported assay types
+#'
+#' Returns all supported assay types declared in the assay registry.
+#'
+#' @return A character vector of supported assay types.
+#'
 #' @export
 get_supported_types <- function() {
   unique(stats::na.omit(supported_assays$assay_type))
 }
 
-# Helper function to get the registry of loadable assays, optionally filtered by assay type.
+#' Get loadable assay registry
+#'
+#' Returns a subset of the assay registry containing only rows that can be loaded
+#' into assay objects.
+#'
+#' @param assay_type Optional character vector of assay types to keep.
+#'
+#' @return A tibble containing loadable assay registry rows.
+#'
 #' @keywords internal
 .get_loadable_assay_registry <- function(assay_type = NULL) {
   registry <- supported_assays[
@@ -78,17 +138,21 @@ get_supported_types <- function() {
   registry
 }
 
-#' An enumeration of suppported assay types.
-#' Helpful for intelligent code completion and to avoid typos in assay type strings.
+#' An enumeration of supported assay types
 #'
-#' Curious what types are available? Just print `AssayTypes`.
+#' Helpful for intelligent code completion and avoiding typos in assay type
+#' strings.
+#'
 #' @examples
 #' AssayTypes$Expression
 #' AssayTypes$ProteinExpression
+#' AssayTypes$PRISM
+#'
 #' @export
 AssayTypes <- enumr::enum( # nolint
   ExpressionMetadata = "ExpressionMetadata",
   Expression = "Expression",
   ProteinExpression = "Protein Expression",
+  DrugResponseAssayMetadata = "DrugResponseAssayMetadata",
   PRISM = "PRISM"
 )

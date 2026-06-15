@@ -12,9 +12,6 @@ It will download the assay files for the latest release of that type in store th
 
 \item{assay_type}{The type of assay to download, e.g. "expression". See supported assay types with `list_supported_assays()`.}
 }
-\value{
-An updated OncoExperiment object with the downloaded assay data stored in the @assays slot.
-}
 \description{
 If the files exist already, it will skip their download.
 }
