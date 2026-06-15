@@ -38,8 +38,8 @@
 #'
 #' @keywords internal
 .load_model_metadata <- function(
-    model_metadata_path = NULL,
-    model_ids
+  model_metadata_path = NULL,
+  model_ids
 ) {
   if (!is.character(model_ids) || length(model_ids) == 0L) {
     stop("`model_ids` must be a non-empty character vector.", call. = FALSE)

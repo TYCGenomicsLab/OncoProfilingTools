@@ -29,7 +29,6 @@ supported_assays <- tibble::tribble(
   "README.txt",
   NA,
   NA,
-
   "DepMap Public 26Q1",
   "ExpressionMetadata",
   NA,
@@ -63,21 +62,18 @@ supported_assays <- tibble::tribble(
   ".*_Cell_Line_Meta_Data\\.csv$",
   NA,
   NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2",
   "DrugResponseAssayMetadata",
   NA,
   ".*_Treatment_Meta_Data\\.csv$",
   NA,
   NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2",
   "DrugResponseAssayMetadata",
   NA,
   ".*_Extended_Primary_Compound_List\\.csv$",
   NA,
   NA,
-
   "PRISM Primary Repurposing DepMap Public 24Q2",
   "DrugResponseAssayMetadata",
   NA,

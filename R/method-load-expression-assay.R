@@ -28,13 +28,13 @@ library(data.table)
 #' @include internal-metadata.R
 #' @keywords internal
 load_expression_assay <- function(
-    path,
-    assay_name = "Expression",
-    model_metadata_path = NULL,
-    unit = "log2(TPM+1)",
-    normalized = TRUE,
-    id_col = "ModelID",
-    feature_type = "transcript"
+  path,
+  assay_name = "Expression",
+  model_metadata_path = NULL,
+  unit = "log2(TPM+1)",
+  normalized = TRUE,
+  id_col = "ModelID",
+  feature_type = "transcript"
 ) {
   ## ---------------------------------------------------
   ## Validate arguments
