@@ -61,7 +61,9 @@ setMethod("download_assays", "OncoExperiment", function(
   ## If there are associated metadata files, let's
   ## recur and download those too
   ## -----------------------------------------------
-  metadata_assays <- assay_urls$metadata_assay |> stats::na.omit() |> unique()
+  metadata_assays <- assay_urls$metadata_assay |>
+    stats::na.omit() |>
+    unique()
   for (metadata_assay in metadata_assays) {
     download_assays(object, assay_type = metadata_assay)
   }

@@ -40,14 +40,12 @@ supported_assays <- tibble::tribble(
   ## ---------------------------------------------------
   ## DepMap expression assays
   ## ---------------------------------------------------
-
   "DepMap Public 26Q1",
   "Expression",
   "ExpressionAssay",
   "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
   "load_expression_assay",
   "ExpressionMetadata",
-
   "DepMap Public 26Q1",
   "Protein Expression",
   "ProteinExpressionAssay",
