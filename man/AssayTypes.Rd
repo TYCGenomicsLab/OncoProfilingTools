@@ -2,15 +2,17 @@
 % Please edit documentation in R/registry-assays.R
 \name{AssayTypes}
 \alias{AssayTypes}
-\title{An enumeration of suppported assay types.
-Helpful for intelligent code completion and to avoid typos in assay type strings.}
+\title{An enumeration of supported assay types}
 \usage{
 AssayTypes
 }
 \description{
-Curious what types are available? Just print `AssayTypes`.
+Helpful for intelligent code completion and avoiding typos in assay type
+strings.
 }
 \examples{
 AssayTypes$Expression
 AssayTypes$ProteinExpression
+AssayTypes$PRISM
+
 }

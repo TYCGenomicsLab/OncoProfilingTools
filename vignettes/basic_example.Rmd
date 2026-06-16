@@ -39,7 +39,6 @@ library(OncoProfilingTools)
 
 
 exp <- OncoExperiment(project_name = "My experiment!")
-download_assays(exp, AssayTypes$Expression)
-exp <- load_assays(exp, AssayTypes$Expression)
+exp <- load_assays(exp, AssayTypes$PRISM)
 exp
 ```

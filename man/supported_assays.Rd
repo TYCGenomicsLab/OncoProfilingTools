@@ -2,13 +2,12 @@
 % Please edit documentation in R/registry-assays.R
 \name{supported_assays}
 \alias{supported_assays}
-\title{Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns
-These are the only files downloaded from DepMap, inferred, and loadable in their assay-specific classes.}
+\title{Mapping of supported assay types, their corresponding assay classes, filename patterns, and metadata dependencies.}
 \usage{
 supported_assays
 }
 \description{
-Mapping of supported assay types, their corresponding OncoAssay classes, and filename patterns
-These are the only files downloaded from DepMap, inferred, and loadable in their assay-specific classes.
+These are the only files downloaded from DepMap, inferred, and loadable in
+their assay-specific classes.
 }
 \keyword{internal}

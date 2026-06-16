@@ -2,10 +2,13 @@
 % Please edit documentation in R/registry-assays.R
 \name{get_supported_types}
 \alias{get_supported_types}
-\title{A helper function to list all supported assay types that OncoExperiment can load.}
+\title{List supported assay types}
 \usage{
 get_supported_types()
 }
+\value{
+A character vector of supported assay types.
+}
 \description{
-A helper function to list all supported assay types that OncoExperiment can load.
+Returns all supported assay types declared in the assay registry.
 }

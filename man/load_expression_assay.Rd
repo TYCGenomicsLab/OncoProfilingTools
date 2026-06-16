@@ -7,6 +7,7 @@
 load_expression_assay(
   path,
   assay_name = "Expression",
+  model_metadata_path = NULL,
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
@@ -17,6 +18,9 @@ load_expression_assay(
 \item{path}{A character string specifying the path to the expression assay file.}
 
 \item{assay_name}{A character string specifying the assay name used in metadata.}
+
+\item{model_metadata_path}{Optional path to `Model.csv`. If `NULL`, the loader
+searches for `Model.csv` beside `path`.}
 
 \item{unit}{A character string specifying the expression unit.}
 
@@ -36,6 +40,7 @@ Loads a DepMap expression file into an `ExpressionAssay`.
 \details{
 The DepMap expression file is read, filtered to default model entries, and
 converted into a Bioconductor-style expression matrix with features as rows
-and models as columns. Metadata from `Model.csv` is not loaded here.
+and models as columns. If `Model.csv` is present beside the assay file, it is
+loaded and aligned into `colData()`.
 }
 \keyword{internal}
