@@ -34,11 +34,40 @@ OncoProfilingTools::load_assays(exp, "Expression")
 ```
 ```{r eval=FALSE}
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
+
 pak::pkg_install(".", ask = FALSE)
+
+library(MultiAssayExperiment)
+library(SummarizedExperiment)
+library(S4Vectors)
 library(OncoProfilingTools)
 
 
 exp <- OncoExperiment(project_name = "My experiment!")
+exp <- load_assays(exp, AssayTypes$Expression)
+exp <- load_assays(exp, AssayTypes$ProteinExpression)
 exp <- load_assays(exp, AssayTypes$PRISM)
 exp
+
+# get all PRISM drug response data where the OncoTreeLineage is bowel
+
+prism <- experiments(exp)$"PRISM"
+protein <- experiments(exp)[["Protein Expression"]]
+
+protein_coldata <- as.data.frame(colData(protein))
+
+bowel_model_ids <- rownames(protein_coldata)[
+  protein_coldata$OncotreeLineage == "Bowel"
+]
+
+bowel_model_ids <- intersect(
+  bowel_model_ids,
+  colnames(prism)
+)
+
+prism_bowel <- prism[, bowel_model_ids]
+prism_bowel_matrix <- assay(prism_bowel, "response")
+dim(prism_bowel_matrix)
+
+prism_bowel # notice we have only the 45 bowel
 ```

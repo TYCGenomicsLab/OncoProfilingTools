@@ -18,6 +18,7 @@ methods::setMethod(
   definition = function(
     object,
     assay,
+    identifier,
     name = NULL,
     overwrite = FALSE,
     ...

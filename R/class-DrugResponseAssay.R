@@ -25,7 +25,7 @@ library(methods)
 #' observed.
 #'
 #' @return An object of class `DrugResponseAssay`.
-#' 
+#'
 #' @name DrugResponseAssay-class
 #' @importClassesFrom SummarizedExperiment SummarizedExperiment
 #' @export

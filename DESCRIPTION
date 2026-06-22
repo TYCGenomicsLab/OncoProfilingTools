@@ -37,6 +37,7 @@ Collate:
     'generic-add-assay.R'
     'generic-download-assays.R'
     'generic-load-assays.R'
+    'generic-subset.R'
     'internal-download-assays.R'
     'internal-load-assays.R'
     'internal-metadata.R'
@@ -47,3 +48,4 @@ Collate:
     'method-load-drug-response-assay.R'
     'method-load-expression-assay.R'
     'method-load-protein-expression-assay.R'
+    'method-subset.R'
