@@ -34,11 +34,14 @@ OncoProfilingTools::load_assays(exp, "Expression")
 ```
 ```{r eval=FALSE}
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
+styler::style_pkg()
+roxygen2::roxygenize(clean = TRUE)
 pak::pkg_install(".", ask = FALSE)
 library(OncoProfilingTools)
 
 
 exp <- OncoExperiment(project_name = "My experiment!")
-exp <- load_assays(exp, AssayTypes$PRISM)
+exp <- load_assays(exp, AssayTypes$Expression)
 exp
+plot_donut(exp, assay = AssayTypes$Expression, variable = ModelMetadataFields$PatientRace)
 ```

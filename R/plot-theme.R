@@ -12,8 +12,8 @@
 #'
 #' @export
 theme_onco <- function(
-  base_size = 11,
-  base_family = ""
+  base_size = 12,
+  base_family = "sans"
 ) {
   ggplot2::theme_minimal(
     base_size = base_size,
