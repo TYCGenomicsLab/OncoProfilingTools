@@ -3,6 +3,8 @@
 
 library(methods)
 
+#' Subset an OncoExperiment
+#'
 #' @export
 methods::setGeneric(
   name = "subset",

@@ -5,15 +5,14 @@ library(methods)
 
 #' Subset an OncoExperiment
 #'
-#' Allow the user the subset an OncoExperiment by a given condition,
-#' similar to the subset function in Seurat. The condition will be evaluated
-#' and the heavy lifitng of subsetting the `MultiAssayExperiment` within an `OncoExperiment`
-#' will be takne care of.
+#' Subset an `OncoExperiment` by evaluating the expression against the
+#' experiment-level `colData()`. This keeps the assay columns and metadata in
+#' sync while filtering models.
 #'
-#' @param object An `OncoExperiment` object to be subset.
-#' @param subset A logical expression indicating which rows to keep.
-#' @param select A logical expression indicating which columns to keep.
-#' @return A new `OncoExperiment` object containing the subset of the original data.
+#' @param object An `OncoExperiment` object to subset.
+#' @param subset A logical expression evaluated in the context of `colData(object)`.
+#' @param select Currently unused. Included for compatibility with the base `subset()` generic.
+#' @return A new `OncoExperiment` object containing only the selected models.
 #' @export
 methods::setMethod(
   f = "subset",
@@ -28,102 +27,89 @@ methods::setMethod(
     select = TRUE,
     ...
   ) {
-    ## ---------------------------------------------------
-    ## Validate arguments
-    ## ---------------------------------------------------
-
     if (!is(object, "OncoExperiment")) {
-      stop("object must be an OncoExperiment")
-    }
-
-    if (!is.logical(subset)) {
-      stop("subset must be a logical expression")
-    }
-
-    if (!is.logical(select)) {
-      stop("select must be a logical expression")
+      stop("`object` must be an OncoExperiment.", call. = FALSE)
     }
 
     validObject(object)
 
     col_data <- MultiAssayExperiment::colData(object)
-    primary_ids <- rownames(col_data)
 
-    if (is.null(primary_ids)) {
-      stop("Cannot subset because `colData(object)` has no primary IDs", call. = FALSE)
+    if (nrow(col_data) == 0L) {
+      stop("Cannot subset because `colData(object)` is empty.", call. = FALSE)
     }
 
-    if (anyDuplicated(primary_ids)) {
-      stop("Cannot subset because `colData(object)` has duplicate primary IDs", call. = FALSE)
+    if (ncol(col_data) == 0L) {
+      stop("Cannot subset because `colData(object)` has no columns.", call. = FALSE)
     }
+
+    col_data_df <- as.data.frame(col_data, stringsAsFactors = FALSE)
 
     if (missing(subset)) {
-      # User did not specify a subset, so we keep everything
-      keep <- rep(TRUE, length(primary_ids)) # Keep all rows
-      warning("No subset expression specified, keeping all rows")
+      keep <- rep(TRUE, nrow(col_data_df))
     } else {
       subset_expr <- substitute(subset)
-      keep <- .eval_subset(subset_expr, col_data, parent.env()) # Evaluate the subset expression
+      subset_env <- list2env(col_data_df, parent = parent.frame())
+
+      keep <- tryCatch(
+        eval(subset_expr, envir = subset_env, enclos = parent.frame()),
+        error = function(e) {
+          stop("Error in subset expression: ", e$message, call. = FALSE)
+        }
+      )
     }
 
-    keep_ids <- primary_ids[keep]
+    if (!is.logical(keep)) {
+      stop("Result of subset expression must be a logical vector.", call. = FALSE)
+    }
+
+    if (length(keep) != nrow(col_data_df)) {
+      stop(
+        "Result of subset expression has incorrect length. Expected ",
+        nrow(col_data_df),
+        ", got ",
+        length(keep),
+        ".",
+        call. = FALSE
+      )
+    }
+
+    keep <- keep & !is.na(keep)
+    keep_ids <- rownames(col_data_df)[keep]
 
     if (length(keep_ids) == 0L) {
       warning(
         "Subset expression matched zero models/samples. Returning an empty OncoExperiment.",
-        .call = FALSE
+        call. = FALSE
       )
     }
 
-    out <- object[, keep_ids, ]
+    out <- object[, keep_ids, drop = FALSE]
     validObject(out)
     out
   }
 )
 
+#' Extract a column from OncoExperiment metadata
+#'
+#' This is a convenience accessor that forwards `$` lookups to the top-level
+#' `colData()` stored on the `OncoExperiment`.
+#'
 #' @keywords internal
-.eval_subset <- function(
-  subset_expr,
-  col_data,
-  parent_env
-) {
-  col_data_df <- as.data.frame(col_data, stringsAsFactors = FALSE)
-
-  if (nrow(col_data_df) == 0L) {
-    stop("Cannot subset because `colData(object)` is empty", call. = FALSE)
-  }
-
-  if (ncol(col_data_df) == 0L) {
-    stop("Cannot subset because `colData(object)` has no columns", call. = FALSE)
-  }
-
-  # Create a new environment with the column data, prevents namespace conflicts
-  subset_env <- list2env(
-    as.list(col_data_df),
-    parent = parent_env
-  )
-
-  keep <- tryCatch(
-    eval(subset_expr, envir = subset_env, enclos = parent_env),
-    error = function(e) {
-      stop("Error in subset expression: ", e$message, call. = FALSE)
+methods::setMethod(
+  f = "$",
+  signature = "OncoExperiment",
+  definition = function(x, name) {
+    if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
+      stop("`name` must be a single non-empty character string.", call. = FALSE)
     }
-  )
 
-  if (!is.logical(keep)) {
-    stop("Result of subset expression is not a logical vector", call. = FALSE)
+    col_data <- MultiAssayExperiment::colData(x)
+
+    if (name %in% colnames(col_data)) {
+      return(col_data[[name]])
+    }
+
+    NULL
   }
-
-  if (length(keep) != nrow(col_data_df)) {
-    stop(
-      "Result of subset expression has incorrect length. Expected ",
-      nrow(col_data_df), ",
-         got ",
-      length(keep),
-      ".",
-      call. = FALSE
-    )
-  }
-
-  keep
-}
+)

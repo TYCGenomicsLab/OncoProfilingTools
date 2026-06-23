@@ -7,18 +7,17 @@
 \S4method{subset}{OncoExperiment}(object, subset, select = TRUE, ...)
 }
 \arguments{
-\item{object}{An `OncoExperiment` object to be subset.}
+\item{object}{An `OncoExperiment` object to subset.}
 
-\item{subset}{A logical expression indicating which rows to keep.}
+\item{subset}{A logical expression evaluated in the context of `colData(object)`.}
 
-\item{select}{A logical expression indicating which columns to keep.}
+\item{select}{Currently unused. Included for compatibility with the base `subset()` generic.}
 }
 \value{
-A new `OncoExperiment` object containing the subset of the original data.
+A new `OncoExperiment` object containing only the selected models.
 }
 \description{
-Allow the user the subset an OncoExperiment by a given condition,
-similar to the subset function in Seurat. The condition will be evaluated
-and the heavy lifitng of subsetting the `MultiAssayExperiment` within an `OncoExperiment`
-will be takne care of.
+Subset an `OncoExperiment` by evaluating the expression against the
+experiment-level `colData()`. This keeps the assay columns and metadata in
+sync while filtering models.
 }
