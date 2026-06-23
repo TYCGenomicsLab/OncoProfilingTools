@@ -34,7 +34,8 @@ OncoProfilingTools::load_assays(exp, "Expression")
 ```
 ```{r eval=FALSE}
 # OncoProfilingTools::download_assays(exp, assay_type = "Expression")
-
+styler::style_pkg()
+roxygen2::roxygenize(clean = TRUE)
 pak::pkg_install(".", ask = FALSE)
 
 library(MultiAssayExperiment)
@@ -51,28 +52,10 @@ plots()
 analyses()
 export()
 
-
-# get all PRISM drug response data where the OncoTreeLineage is bowel
-
-prism <- experiments(exp)$"PRISM"
-protein <- experiments(exp)[["Protein Expression"]]
-
-protein_coldata <- as.data.frame(colData(protein))
-
-bowel_model_ids <- rownames(protein_coldata)[
-  protein_coldata$OncotreeLineage == "Bowel"
-]
-
-bowel_model_ids <- intersect(
-  bowel_model_ids,
-  colnames(prism)
-)
-
-prism_bowel <- prism[, bowel_model_ids]
-prism_bowel_matrix <- assay(prism_bowel, "response")
-dim(prism_bowel_matrix)
-
-prism_bowel # notice we have only the 45 bowelanalyses()
+exp <- OncoExperiment(project_name = "My experiment!")
+exp <- load_assays(exp, AssayTypes$Expression)
+exp
+plot_donut(exp, assay = AssayTypes$Expression, variable = ModelMetadataFields$PatientRace)
 ```
 ## Navigating `colData` and assay metadata `OncoExperiment` is a `MultiAssayExperiment`, so there are two places to look when you want model metadata: - `colData(exp)` for the metadata attached to the `OncoExperiment` itself - `colData(experiments(exp)[["Expression"]])` for the metadata attached to the loaded Expression assay If a field like `DepmapModelType`, `ModelID`, or `PatientRace` shows up as `NULL`, first inspect the available column names: ```r colnames(colData(exp)) ``` Once you confirm the column exists, you can filter directly: ```r colData(exp)$DepmapModelType == "COAD" ``` You can also work with the assay-level metadata and its aligned columns: ```r expression_assay <- experiments(exp)[["Expression"]] colnames(colData(expression_assay)) rownames(colData(expression_assay)) == colnames(expression_assay) ``` That alignment is what keeps the loaded model metadata attached to the expression columns, so it is safe to use for filtering and subsetting.
 <!-- R Notebook saved outputs: do not edit

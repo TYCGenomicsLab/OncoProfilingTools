@@ -34,6 +34,7 @@ Collate:
     'class-ExpressionAssay.R'
     'class-OncoExperiment.R'
     'class-ProteinExpressionAssay.R'
+    'enum-ModelMetadataFields.R'
     'generic-add-assay.R'
     'generic-download-assays.R'
     'generic-load-assays.R'
@@ -49,3 +50,5 @@ Collate:
     'method-load-expression-assay.R'
     'method-load-protein-expression-assay.R'
     'method-subset.R'
+    'plot-theme.R'
+    'plot-donut.R'
