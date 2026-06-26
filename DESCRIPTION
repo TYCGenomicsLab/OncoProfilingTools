@@ -32,6 +32,7 @@ Config/roxygen2/markdown: true
 Collate:
     'class-DrugResponseAssay.R'
     'class-ExpressionAssay.R'
+    'class-MutationAssay.R'
     'class-OncoExperiment.R'
     'class-ProteinExpressionAssay.R'
     'enum-ModelMetadataFields.R'
@@ -48,6 +49,7 @@ Collate:
     'method-load-assays.R'
     'method-load-drug-response-assay.R'
     'method-load-expression-assay.R'
+    'method-load-mutation-assay.R'
     'method-load-protein-expression-assay.R'
     'method-subset.R'
     'plot-theme.R'

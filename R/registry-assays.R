@@ -53,6 +53,17 @@ supported_assays <- tibble::tribble(
   "ExpressionMetadata",
 
   ## ---------------------------------------------------
+  ## DepMap mutation assays
+  ## ---------------------------------------------------
+
+  "DepMap Public 26Q1",
+  "Mutation",
+  "MutationAssay",
+  "OmicsSomaticMutations.csv",
+  "load_mutation_assay",
+  "ExpressionMetadata",
+
+  ## ---------------------------------------------------
   ## PRISM metadata
   ## ---------------------------------------------------
 
@@ -148,5 +159,7 @@ AssayTypes <- enumr::enum( # nolint
   Expression = "Expression",
   ProteinExpression = "Protein Expression",
   DrugResponseAssayMetadata = "DrugResponseAssayMetadata",
-  PRISM = "PRISM"
+  PRISM = "PRISM",
+  Mutation = "Mutation",
+  MutationMetadata = "MutationMetadata"
 )
