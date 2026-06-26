@@ -29,6 +29,7 @@ supported_assays <- tibble::tribble(
   "README.txt",
   NA,
   NA,
+
   "DepMap Public 26Q1",
   "ExpressionMetadata",
   NA,
@@ -45,11 +46,23 @@ supported_assays <- tibble::tribble(
   "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
   "load_expression_assay",
   "ExpressionMetadata",
+
   "DepMap Public 26Q1",
   "Protein Expression",
   "ProteinExpressionAssay",
   "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
   "load_protein_expression_assay",
+  "ExpressionMetadata",
+
+  ## ---------------------------------------------------
+  ## DepMap mutation assays
+  ## ---------------------------------------------------
+
+  "DepMap Public 26Q1",
+  "Mutation",
+  "MutationAssay",
+  "OmicsSomaticMutations.csv",
+  "load_mutation_assay",
   "ExpressionMetadata",
 
   ## ---------------------------------------------------
@@ -148,5 +161,7 @@ AssayTypes <- enumr::enum( # nolint
   Expression = "Expression",
   ProteinExpression = "Protein Expression",
   DrugResponseAssayMetadata = "DrugResponseAssayMetadata",
-  PRISM = "PRISM"
+  PRISM = "PRISM",
+  Mutation = "Mutation",
+  MutationMetadata = "MutationMetadata"
 )
