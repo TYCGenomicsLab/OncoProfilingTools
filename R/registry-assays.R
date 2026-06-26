@@ -29,7 +29,6 @@ supported_assays <- tibble::tribble(
   "README.txt",
   NA,
   NA,
-
   "DepMap Public 26Q1",
   "ExpressionMetadata",
   NA,
@@ -46,7 +45,6 @@ supported_assays <- tibble::tribble(
   "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
   "load_expression_assay",
   "ExpressionMetadata",
-
   "DepMap Public 26Q1",
   "Protein Expression",
   "ProteinExpressionAssay",
