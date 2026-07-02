@@ -19,6 +19,7 @@ methods::setClass(
   "DrugSensitivityComparison",
   slots = c(
     stats = "data.frame",
+    plot_data = "list",
     group1_n_models = "integer",
     group2_n_models = "integer",
     unit = "character",
@@ -30,27 +31,28 @@ methods::setClass(
 )
 
 #' Drug sensitivity response units
-#' LFC = log fold change,
+#' LFC = log fold change, 
 #' AUC = area under the curve,
 #' IC50 = half maximal inhibitory concentration
 #' @export
-SensitivityUnits <- list(
-  LFC = "LFC"
-  # TODO: AUC = "AUC",
-  # TODO: IC50 = "IC50"
+SensitivityUnits <- enumr::enum(
+  "LFC" = "logfoldchange",
+  # TODO: "AUC" = "AUC",
+  # TODO: "IC50" = "IC50"
 )
+
 
 
 #' Compare drug sensitivities between two OncoExperiment groups
 #'
 #' Compares PRISM drug response values between two user-defined groups stored in
 #' a single `OncoExperiment` object using per-drug Welch two-sample t-tests.
-#'
+#' 
 #' **User is expected to define the groups prior to calling this method.**
 #' For example, to compare drug sensitivities between two cancer types, subset
 #' the `OncoExperiment` and then assign groups:
 #' `COAD$group <- c(1, 1, 2, 1, 2, 2, 1, ...)`
-#'
+#' 
 #' Whatever labels were chosen for the groups must be passed into the function.
 #' The method looks in the top-level `$group` column and compares the selected
 #' values within the PRISM assay.
@@ -67,7 +69,8 @@ SensitivityUnits <- list(
 #' @param group2 Label for the second group of models/samples.
 #' @param unit Optional character scalar describing the expected response unit
 #'   (for example, `"LFC"`). If `NULL`, the unit is inferred from the assay
-#'   metadata when available.
+#'   metadata when available and normalized to `"LFC"` when the metadata uses
+#'   an equivalent label such as `"logfoldchange"`.
 #' @param p_adj_method Method passed to `stats::p.adjust()`.
 #' @param effect_threshold Non-negative numeric threshold for
 #'   `abs(mean_diff)` when computing significance flags.
@@ -116,6 +119,20 @@ methods::setMethod(
       stop("`effect_threshold` must be a single non-negative numeric value.", call. = FALSE)
     }
 
+    .normalize_response_unit <- function(x) {
+      if (is.null(x)) {
+        return(NULL)
+      }
+
+      x_chr <- tolower(as.character(x))
+
+      if (x_chr %in% c("logfoldchange", "log fold change", "lfc")) {
+        return("LFC")
+      }
+
+      as.character(x)
+    }
+
     .get_drug_response_assay <- function(x) {
       experiments <- MultiAssayExperiment::experiments(x)
 
@@ -148,13 +165,11 @@ methods::setMethod(
     assay <- assay_info$assay
     assay_name <- assay_info$assay_name
 
-    assay_unit <- S4Vectors::metadata(assay)$unit
+    assay_unit <- .normalize_response_unit(S4Vectors::metadata(assay)$unit)
 
-    if (length(assay_unit) == 0L) {
-      assay_unit <- NULL
-    }
+    unit <- .normalize_response_unit(unit)
 
-    if (!is.null(unit) && !is.null(assay_unit) && !identical(as.character(assay_unit), unit)) {
+    if (!is.null(unit) && !is.null(assay_unit) && !identical(assay_unit, unit)) {
       stop(
         "`unit` does not match the loaded assay metadata unit. Expected `",
         assay_unit,
@@ -222,6 +237,25 @@ methods::setMethod(
     }
 
     assay_groups <- primary_lookup[assay_primary_ids]
+
+    assigned_idx <- !is.na(assay_groups) & nzchar(assay_groups)
+
+    if (any(!assigned_idx)) {
+      message(
+        "Ignoring ",
+        sum(!assigned_idx),
+        " assay sample(s) without a group assignment in `colData(object)`."
+      )
+      assay_groups <- assay_groups[assigned_idx]
+      response <- response[, assigned_idx, drop = FALSE]
+    }
+
+    if (ncol(response) == 0L) {
+      stop(
+        "No assay samples remain after removing unassigned group labels.",
+        call. = FALSE
+      )
+    }
 
     group1_idx <- which(assay_groups == group1_key)
     group2_idx <- which(assay_groups == group2_key)
@@ -333,6 +367,16 @@ methods::setMethod(
     methods::new(
       "DrugSensitivityComparison",
       stats = results,
+      plot_data = list(
+        response = response,
+        sample_groups = assay_groups,
+        feature_ids = common_features,
+        group1_idx = group1_idx,
+        group2_idx = group2_idx,
+        assay_name = assay_name,
+        group1_label = group1_key,
+        group2_label = group2_key
+      ),
       group1_n_models = as.integer(ncol(response1)),
       group2_n_models = as.integer(ncol(response2)),
       unit = as.character(resolved_unit),
