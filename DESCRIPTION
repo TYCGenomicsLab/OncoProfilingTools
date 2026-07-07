@@ -16,6 +16,7 @@ Imports:
     httr2,
     tibble,
     dplyr,
+    enumr,
     data.table,
     S4Vectors,
     SummarizedExperiment,
@@ -26,7 +27,10 @@ Remotes:
 Suggests:
     roxygen2,
     knitr,
-    rmarkdown
+    rmarkdown,
+    openxlsx,
+    ggplot2,
+    ggrepel
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
 Collate:
@@ -37,6 +41,7 @@ Collate:
     'class-ProteinExpressionAssay.R'
     'enum-ModelMetadataFields.R'
     'generic-add-assay.R'
+    'generic-compare-drug-sensitivites.R'
     'generic-download-assays.R'
     'generic-load-assays.R'
     'generic-subset.R'
@@ -44,6 +49,7 @@ Collate:
     'internal-load-assays.R'
     'internal-metadata.R'
     'method-add-assay.R'
+    'method-compare-drug-sensitivities.R'
     'method-download-assays.R'
     'registry-assays.R'
     'method-load-assays.R'
