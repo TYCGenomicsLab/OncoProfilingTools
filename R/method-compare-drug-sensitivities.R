@@ -35,11 +35,11 @@ methods::setClass(
 #' AUC = area under the curve,
 #' IC50 = half maximal inhibitory concentration
 #' @export
-SensitivityUnits <- enumr::enum(
-  "LFC" = "logfoldchange",
-  # TODO: "AUC" = "AUC",
-  # TODO: "IC50" = "IC50"
-)
+SensitivityUnits <- enumr::new_generic_enum(list(
+  LFC = "logfoldchange"
+  # TODO: AUC = "AUC",
+  # TODO: IC50 = "IC50"
+))
 
 
 

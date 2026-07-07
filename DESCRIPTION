@@ -16,6 +16,7 @@ Imports:
     httr2,
     tibble,
     dplyr,
+    enumr,
     data.table,
     S4Vectors,
     SummarizedExperiment,

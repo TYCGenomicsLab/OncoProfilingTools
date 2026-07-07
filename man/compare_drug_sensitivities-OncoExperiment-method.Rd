@@ -23,7 +23,8 @@
 
 \item{unit}{Optional character scalar describing the expected response unit
 (for example, `"LFC"`). If `NULL`, the unit is inferred from the assay
-metadata when available.}
+metadata when available and normalized to `"LFC"` when the metadata uses
+an equivalent label such as `"logfoldchange"`.}
 
 \item{p_adj_method}{Method passed to `stats::p.adjust()`.}
 
