@@ -31,7 +31,7 @@ methods::setClass(
 )
 
 #' Drug sensitivity response units
-#' LFC = log fold change, 
+#' LFC = log fold change,
 #' AUC = area under the curve,
 #' IC50 = half maximal inhibitory concentration
 #' @export
@@ -42,17 +42,16 @@ SensitivityUnits <- enumr::new_generic_enum(list(
 ))
 
 
-
 #' Compare drug sensitivities between two OncoExperiment groups
 #'
 #' Compares PRISM drug response values between two user-defined groups stored in
 #' a single `OncoExperiment` object using per-drug Welch two-sample t-tests.
-#' 
+#'
 #' **User is expected to define the groups prior to calling this method.**
 #' For example, to compare drug sensitivities between two cancer types, subset
 #' the `OncoExperiment` and then assign groups:
 #' `COAD$group <- c(1, 1, 2, 1, 2, 2, 1, ...)`
-#' 
+#'
 #' Whatever labels were chosen for the groups must be passed into the function.
 #' The method looks in the top-level `$group` column and compares the selected
 #' values within the PRISM assay.
