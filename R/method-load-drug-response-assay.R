@@ -184,8 +184,11 @@ load_drug_response_assay <- function(
   ## Extract numeric response values
   ## ---------------------------------------------------
 
-  response_values_df <- response_df |>
-    dplyr::select(-1L)
+  response_values_df <- response_df[
+    ,
+    -1L,
+    with = FALSE
+  ]
 
   non_numeric_cols <- names(response_values_df)[
     !vapply(response_values_df, is.numeric, logical(1))

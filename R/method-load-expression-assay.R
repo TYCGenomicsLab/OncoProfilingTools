@@ -114,10 +114,9 @@ load_expression_assay <- function(
   n_rows_before_default_filter <- nrow(expression_df)
 
   if ("IsDefaultEntryForModel" %in% names(expression_df)) {
-    expression_df <- dplyr::filter(
-      expression_df,
-      .data$IsDefaultEntryForModel == "Yes"
-    )
+    expression_df <- expression_df[
+      IsDefaultEntryForModel == "Yes"
+    ]
   } else {
     warning(
       "`IsDefaultEntryForModel` column was not found. ",
@@ -178,11 +177,14 @@ load_expression_assay <- function(
       paste(index_like_cols, collapse = ", ")
     )
 
-    expression_df <- expression_df |>
-      dplyr::select(-dplyr::all_of(index_like_cols))
+    expression_df[
+      ,
+      (index_like_cols) := NULL
+    ]
   }
 
   identifier_cols <- c(
+    id_col,
     "SequencingID",
     "ModelConditionID",
     "ModelID",
@@ -217,9 +219,13 @@ load_expression_assay <- function(
     )
   }
 
-  expression_index <- expression_df |>
-    dplyr::select(dplyr::all_of(identifier_cols)) |>
-    as.data.frame(stringsAsFactors = FALSE)
+  expression_index <- as.data.frame(
+    expression_df[
+      ,
+      ..identifier_cols
+    ],
+    stringsAsFactors = FALSE
+  )
 
   rownames(expression_index) <- model_ids
 
@@ -227,11 +233,15 @@ load_expression_assay <- function(
   ## Validate expression columns
   ## ---------------------------------------------------
 
-  expression_values_df <- expression_df |>
-    dplyr::select(dplyr::all_of(expression_cols))
+  if (length(identifier_cols) > 0L) {
+    expression_df[
+      ,
+      (identifier_cols) := NULL
+    ]
+  }
 
-  non_numeric_cols <- names(expression_values_df)[
-    !vapply(expression_values_df, is.numeric, logical(1))
+  non_numeric_cols <- names(expression_df)[
+    !vapply(expression_df, is.numeric, logical(1))
   ]
 
   if (length(non_numeric_cols) > 0L) {
@@ -247,19 +257,38 @@ load_expression_assay <- function(
   ## ---------------------------------------------------
 
   message(
-    "Converting expression data to matrix: ",
+    "Converting expression data to matrix in chunks: ",
     n_rows_after_default_filter,
     " models x ",
     length(expression_cols),
     " features."
   )
 
-  expression_matrix <- as.matrix(expression_values_df)
+  expression_matrix <- matrix(
+    NA_real_,
+    nrow = length(expression_cols),
+    ncol = n_rows_after_default_filter,
+    dimnames = list(expression_cols, model_ids)
+  )
 
-  rownames(expression_matrix) <- model_ids
-  colnames(expression_matrix) <- expression_cols
+  chunk_size <- 1000L
+  chunk_starts <- seq.int(1L, length(expression_cols), by = chunk_size)
 
-  rm(expression_df, expression_values_df)
+  for (chunk_start in chunk_starts) {
+    chunk_end <- min(chunk_start + chunk_size - 1L, length(expression_cols))
+    chunk_cols <- expression_cols[chunk_start:chunk_end]
+
+    chunk_matrix <- as.matrix(
+      expression_df[
+        ,
+        ..chunk_cols
+      ]
+    )
+
+    expression_matrix[chunk_cols, ] <- t(chunk_matrix)
+  }
+
+  rm(expression_df)
   invisible(gc())
 
   if (!is.numeric(expression_matrix)) {
@@ -274,17 +303,7 @@ load_expression_assay <- function(
   }
 
   ## ---------------------------------------------------
-  ## Transpose to Bioconductor convention
-  ## ---------------------------------------------------
-
-  message(
-    "Transposing expression matrix to Bioconductor convention: features x models."
-  )
-
-  expression_matrix <- t(expression_matrix)
-
-  ## ---------------------------------------------------
-  ## Validate matrix dimnames after transpose
+  ## Validate matrix dimnames
   ## ---------------------------------------------------
 
   feature_ids <- rownames(expression_matrix)
@@ -292,7 +311,7 @@ load_expression_assay <- function(
 
   if (is.null(feature_ids) || anyNA(feature_ids) || any(!nzchar(feature_ids))) {
     stop(
-      "Expression matrix feature IDs are missing, NA, or empty after transpose.",
+      "Expression matrix feature IDs are missing, NA, or empty.",
       call. = FALSE
     )
   }
@@ -301,7 +320,7 @@ load_expression_assay <- function(
     duplicated_features <- unique(feature_ids[duplicated(feature_ids)])
 
     stop(
-      "Expression matrix feature IDs contain duplicates after transpose. Examples: ",
+      "Expression matrix feature IDs contain duplicates. Examples: ",
       paste(utils::head(duplicated_features, 10L), collapse = ", "),
       call. = FALSE
     )
@@ -309,7 +328,7 @@ load_expression_assay <- function(
 
   if (is.null(model_ids) || anyNA(model_ids) || any(!nzchar(model_ids))) {
     stop(
-      "Expression matrix model IDs are missing, NA, or empty after transpose.",
+      "Expression matrix model IDs are missing, NA, or empty.",
       call. = FALSE
     )
   }
@@ -318,7 +337,7 @@ load_expression_assay <- function(
     duplicated_models <- unique(model_ids[duplicated(model_ids)])
 
     stop(
-      "Expression matrix model IDs contain duplicates after transpose. Examples: ",
+      "Expression matrix model IDs contain duplicates. Examples: ",
       paste(utils::head(duplicated_models, 10L), collapse = ", "),
       call. = FALSE
     )
