@@ -47,37 +47,30 @@ generate_two_agent_report <- function(
 
   report <- paste0(
     "# Two-Agent Onco-IAN Prototype Report\n\n",
-
     "## 1. Prototype Status\n\n",
     "This report was generated from the current two-agent prototype developed this week. ",
     "The system currently supports two enrichment agents: a KEGG pathway enrichment agent and a GO Biological Process enrichment agent.\n\n",
-
     "## 2. Input Summary\n\n",
     "- Input genes analyzed: ", input_n, "\n",
     "- Successfully mapped genes: ", mapped_n, "\n",
     "- Mapping rate: ", round((mapped_n / input_n) * 100, 2), "%\n",
     "- KEGG enriched terms returned: ", kegg_n, "\n",
     "- GO enriched terms returned: ", go_n, "\n\n",
-
     "## 3. KEGG Agent Output\n\n",
     kegg_result$summary,
     "\n\n",
-
     "## 4. GO Biological Process Agent Output\n\n",
     go_result$summary,
     "\n\n",
-
     "## 5. Combined Interpretation\n\n",
     "The KEGG agent provides pathway-level interpretation, while the GO agent provides biological process-level interpretation. ",
     "Together, these agents provide complementary biological views of the input DEG list. ",
     "This confirms that the initial Onco-IAN style workflow can take a gene list, map gene symbols to Entrez identifiers, run enrichment analysis, and generate a structured report.\n\n",
-
     "## 6. Current Limitations\n\n",
     "- The current prototype uses rule-based summaries rather than full LLM-generated interpretation.\n",
     "- The workflow currently includes KEGG and GO only.\n",
     "- Biological interpretation still needs review by the research team.\n",
     "- Dataset-specific assumptions should be validated before paper-level conclusions.\n\n",
-
     "## 7. Next Steps\n\n",
     "- Run the same workflow on the CRC/CMS4 dataset provided by the data team.\n",
     "- Improve report generation with more detailed interpretation sections.\n",

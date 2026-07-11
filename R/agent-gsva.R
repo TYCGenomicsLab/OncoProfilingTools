@@ -51,8 +51,7 @@ run_gsva_agent <- function(
   }
 
   expression_matrix <- expression_matrix[
-    !duplicated(rownames(expression_matrix)),
-    ,
+    !duplicated(rownames(expression_matrix)), ,
     drop = FALSE
   ]
 
