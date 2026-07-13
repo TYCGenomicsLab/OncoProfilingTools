@@ -16,7 +16,9 @@ find_project_root <- function() {
     mustWork = TRUE
   )
 
-  if (basename(current_directory) == "shiny-app") {
+  if (
+    basename(current_directory) == "shiny-app"
+  ) {
     return(
       normalizePath(
         file.path(current_directory, ".."),
@@ -25,7 +27,21 @@ find_project_root <- function() {
     )
   }
 
-  current_directory
+  if (
+    dir.exists(
+      file.path(current_directory, "shiny-app")
+    )
+  ) {
+    return(current_directory)
+  }
+
+  stop(
+    paste(
+      "Could not locate the OncoProfilingTools project root from:",
+      current_directory
+    ),
+    call. = FALSE
+  )
 }
 
 real_agent_project_root <- find_project_root()
