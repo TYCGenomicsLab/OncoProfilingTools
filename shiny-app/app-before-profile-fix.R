@@ -668,86 +668,54 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$validate_dataset, {
-    req(input$dataset)
 
     dataset_error(NULL)
+    dataset_data(NULL)
+
+    if (is.null(input$dataset)) {
+      dataset_error("Upload a dataset before validation.")
+
+      showNotification(
+        "Please upload a dataset first.",
+        type = "warning"
+      )
+
+      return()
+    }
 
     tryCatch(
       {
-        uploaded_path <- input$dataset$datapath
-        uploaded_name <- input$dataset$name
-
-        if (
-          is.null(uploaded_path) ||
-          !nzchar(uploaded_path) ||
-          !file.exists(uploaded_path)
-        ) {
-          stop("The uploaded temporary file is unavailable. Please upload it again.")
-        }
-
         loaded_data <- read_uploaded_dataset(
-          uploaded_path,
-          uploaded_name
+          input$dataset$datapath,
+          input$dataset$name
         )
 
-        if (is.null(loaded_data)) {
-          stop("The dataset reader returned no data.")
-        }
-
-        if (nrow(loaded_data) == 0L) {
+        if (nrow(loaded_data) == 0) {
           stop("The uploaded dataset has no data rows.")
         }
 
-        if (ncol(loaded_data) == 0L) {
+        if (ncol(loaded_data) == 0) {
           stop("The uploaded dataset has no columns.")
         }
 
         dataset_data(loaded_data)
 
-        analysis_log_value(
-          paste0(
-            "[VALIDATED] ",
-            uploaded_name,
-            "\n[DIMENSIONS] ",
-            format(nrow(loaded_data), big.mark = ","),
-            " rows × ",
-            format(ncol(loaded_data), big.mark = ","),
-            " columns"
-          )
-        )
-
-        session$sendCustomMessage(
-          type = "agent-status",
-          message = list(
-            pipeline = "ready",
-            pipeline_message = "Dataset validated — select compatible agents"
-          )
-        )
-
         showNotification(
-          paste(
-            "Dataset validated:",
-            format(nrow(loaded_data), big.mark = ","),
-            "rows and",
-            format(ncol(loaded_data), big.mark = ","),
-            "columns."
-          ),
-          type = "message",
-          duration = 8
+          "Dataset validated successfully.",
+          type = "message"
         )
       },
       error = function(error) {
-        dataset_data(NULL)
         dataset_error(conditionMessage(error))
 
         showNotification(
           conditionMessage(error),
           type = "error",
-          duration = 10
+          duration = 8
         )
       }
     )
-  }, ignoreInit = TRUE)
+  })
 
   observeEvent(input$run_analysis, {
 

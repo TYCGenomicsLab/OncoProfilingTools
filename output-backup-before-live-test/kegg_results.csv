@@ -1,0 +1,2 @@
+"category","subcategory","ID","Description","GeneRatio","BgRatio","RichFactor","FoldEnrichment","zScore","pvalue","p.adjust","qvalue","geneID","Count"
+"Human Diseases","Endocrine and metabolic disease","hsa04950","Maturity onset diabetes of the young","5/152","26/9416",0.192307692307692,11.912955465587,7.13721769785538,5.1338314260401e-05,0.0137073299075271,0.00713252475402477,"3170/6927/3172/3171/3174",5

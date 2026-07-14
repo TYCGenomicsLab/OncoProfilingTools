@@ -1732,3 +1732,19 @@ table.dataTable.stripe tbody tr.odd {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+/* Ensure the real Shiny validation button receives clicks */
+#validate_dataset,
+.validate-dataset-button {
+  display: block !important;
+  width: 100% !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 20 !important;
+}
+
+#validate_dataset:disabled {
+  pointer-events: auto !important;
+}
