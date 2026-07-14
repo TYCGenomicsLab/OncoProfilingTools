@@ -162,9 +162,11 @@ export_compare_drug_sensitivities_workbook <- function(
 
   response <- NULL
   sample_groups <- NULL
+  sample_labels <- NULL
   if (is.list(plot_data) && !is.null(plot_data$response) && !is.null(plot_data$sample_groups)) {
     response <- plot_data$response
     sample_groups <- as.character(plot_data$sample_groups)
+    sample_labels <- plot_data$sample_labels
     if (!is.matrix(response) || ncol(response) != length(sample_groups)) {
       stop("`comparison_result@plot_data` has inconsistent response matrix dimensions.", call. = FALSE)
     }
@@ -172,6 +174,16 @@ export_compare_drug_sensitivities_workbook <- function(
     if (is.null(colnames(response))) {
       colnames(response) <- paste0("sample_", seq_len(ncol(response)))
     }
+
+    if (is.null(sample_labels) || length(sample_labels) != ncol(response)) {
+      sample_labels <- colnames(response)
+    } else {
+      sample_labels <- as.character(sample_labels)
+    }
+
+    sample_labels[is.na(sample_labels) | !nzchar(sample_labels)] <- colnames(response)[
+      is.na(sample_labels) | !nzchar(sample_labels)
+    ]
   } else {
     message(
       "`comparison_result` does not contain plot data. Writing the workbook without Boxplot/Scatterplot/Heatmap sheets."
@@ -182,6 +194,8 @@ export_compare_drug_sensitivities_workbook <- function(
 
   group1_display <- .display_label(group1_label)
   group2_display <- .display_label(group2_label)
+  sample_group1_key <- plot_data$group1_label %||% group1_display
+  sample_group2_key <- plot_data$group2_label %||% group2_display
   comparison_sheet_name <- .make_unique_sheet_name(sprintf("%s_vs_%s", group1_display, group2_display), character())
   readme_title <- sprintf("How to read the %s table:", comparison_sheet_name)
 
@@ -191,6 +205,9 @@ export_compare_drug_sensitivities_workbook <- function(
 
   group1_mean_col <- paste0("mean_", .clean_label(group1_display))
   group2_mean_col <- paste0("mean_", .clean_label(group2_display))
+  group1_idx <- which(sample_groups == as.character(sample_group1_key))
+  group2_idx <- which(sample_groups == as.character(sample_group2_key))
+  sample_order <- c(group1_idx, group2_idx)
 
   export_tbl <- stats_tbl
   export_tbl[[group1_mean_col]] <- export_tbl$mean_group1
@@ -199,6 +216,21 @@ export_compare_drug_sensitivities_workbook <- function(
   export_tbl$mean_group1 <- NULL
   export_tbl$mean_group2 <- NULL
   export_tbl$mean_diff <- NULL
+
+  sample_tbl <- NULL
+  sample_col_names <- character()
+  if (!is.null(response) && length(sample_order) > 0L) {
+    sample_tbl <- as.data.frame(
+      response[export_tbl$feature_id, sample_order, drop = FALSE],
+      stringsAsFactors = FALSE
+    )
+    sample_col_names <- paste0(sample_labels[sample_order], "_", sample_groups[sample_order])
+    names(sample_tbl) <- sample_col_names
+  }
+
+  if (!is.null(sample_tbl)) {
+    export_tbl <- cbind(export_tbl, sample_tbl)
+  }
 
   preferred_cols <- c(
     "feature_id",
@@ -209,22 +241,16 @@ export_compare_drug_sensitivities_workbook <- function(
       group1_mean_col,
       group2_mean_col,
       "Difference",
-      "n_group1",
-      "n_group2",
       "p_value",
       "p_adj",
-      "neg_log10_p",
-      "significant"
+      sample_col_names
     )),
     group1_mean_col,
     group2_mean_col,
     "Difference",
-    "n_group1",
-    "n_group2",
     "p_value",
     "p_adj",
-    "neg_log10_p",
-    "significant"
+    sample_col_names
   )
   preferred_cols <- unique(intersect(preferred_cols, names(export_tbl)))
   export_tbl <- export_tbl[, preferred_cols, drop = FALSE]
@@ -252,6 +278,7 @@ export_compare_drug_sensitivities_workbook <- function(
     sprintf("Drugs are sorted by Difference = mean %s response - mean %s response.", group1_display, group2_display),
     sprintf("The most negative values at the top indicate drugs to which %s cell lines are most sensitive relative to %s.", group1_display, group2_display),
     "Lower PRISM response values indicate greater growth inhibition, meaning greater sensitivity.",
+    "Cell line quantification columns are labeled with the resolved cell line name and group.",
     "",
     "Key columns:",
     "feature_id   = treatment or drug identifier",

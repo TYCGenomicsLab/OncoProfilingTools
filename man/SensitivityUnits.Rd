@@ -3,7 +3,7 @@
 \name{SensitivityUnits}
 \alias{SensitivityUnits}
 \title{Drug sensitivity response units
-LFC = log fold change, 
+LFC = log fold change,
 AUC = area under the curve,
 IC50 = half maximal inhibitory concentration}
 \usage{
@@ -11,7 +11,7 @@ SensitivityUnits
 }
 \description{
 Drug sensitivity response units
-LFC = log fold change, 
+LFC = log fold change,
 AUC = area under the curve,
 IC50 = half maximal inhibitory concentration
 }

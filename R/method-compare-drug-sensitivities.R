@@ -87,6 +87,7 @@ methods::setMethod(
                         p_adj_method = "BH",
                         effect_threshold = 0,
                         ...) {
+    # guard clauses and input validation
     if (!is.atomic(group1) || length(group1) != 1L || is.na(group1)) {
       stop("`group1` must be a single non-NA value.", call. = FALSE)
     }
@@ -95,6 +96,7 @@ methods::setMethod(
       stop("`group2` must be a single non-NA value.", call. = FALSE)
     }
 
+    # coercion to correct datatype, someone may define groups as factors or integers (e.g., 1, 2)
     group1_key <- as.character(group1)
     group2_key <- as.character(group2)
 
@@ -118,6 +120,7 @@ methods::setMethod(
       stop("`effect_threshold` must be a single non-negative numeric value.", call. = FALSE)
     }
 
+    # multiple ways to refer to the same unit so we normalize to a canonical value
     .normalize_response_unit <- function(x) {
       if (is.null(x)) {
         return(NULL)
@@ -132,6 +135,7 @@ methods::setMethod(
       as.character(x)
     }
 
+    # Helper function to find the first DrugResponseAssay in the MultiAssayExperiment
     .get_drug_response_assay <- function(x) {
       experiments <- MultiAssayExperiment::experiments(x)
 
@@ -160,14 +164,16 @@ methods::setMethod(
       )
     }
 
+
     assay_info <- .get_drug_response_assay(object)
-    assay <- assay_info$assay
-    assay_name <- assay_info$assay_name
+    assay <- assay_info$assay # the actual DrugResponseAssay object
+    assay_name <- assay_info$assay_name # the name of the assay in the MultiAssayExperiment
 
     assay_unit <- .normalize_response_unit(S4Vectors::metadata(assay)$unit)
 
     unit <- .normalize_response_unit(unit)
 
+    # if the unit is provided, check that it matches the assay metadata unit (if available) else throw an error
     if (!is.null(unit) && !is.null(assay_unit) && !identical(assay_unit, unit)) {
       stop(
         "`unit` does not match the loaded assay metadata unit. Expected `",
@@ -188,6 +194,7 @@ methods::setMethod(
       )
     }
 
+    # Extract the response assay and validate its structure
     response <- SummarizedExperiment::assay(
       assay,
       i = "response",
@@ -198,6 +205,7 @@ methods::setMethod(
       stop("The response assay must be a numeric matrix.", call. = FALSE)
     }
 
+    # Validate that the top-level `colData` contains a `group` column
     col_data <- MultiAssayExperiment::colData(object)
 
     if (!"group" %in% colnames(col_data)) {
@@ -208,6 +216,7 @@ methods::setMethod(
       stop("`object` has no models/samples in `colData(object)`.", call. = FALSE)
     }
 
+    # Validate that the sample map contains entries for the assay, sample map is a data frame with columns `assay`, `primary`, and `colname`
     sample_map <- MultiAssayExperiment::sampleMap(object)
     assay_map <- sample_map[sample_map$assay == assay_name, , drop = FALSE]
 
@@ -219,6 +228,41 @@ methods::setMethod(
       )
     }
 
+    # Helper function to resolve sample display names from the metadata,
+    # falling back to the assay column names if necessary
+    # the sample display names are used for labeling points in the volcano plot and for reporting in the workbook
+    .resolve_sample_display_names <- function(sample_metadata, fallback_names) {
+      if (!is.data.frame(sample_metadata) || nrow(sample_metadata) == 0L) {
+        return(as.character(fallback_names))
+      }
+
+      display_names <- rep(NA_character_, nrow(sample_metadata))
+
+      for (column_name in c(
+        "CellLineName",
+        "ccle_name",
+        "StrippedCellLineName",
+        "cell_line_name",
+        "model_id"
+      )) {
+        if (!column_name %in% colnames(sample_metadata)) {
+          next
+        }
+
+        candidate_values <- as.character(sample_metadata[[column_name]])
+        candidate_values[!nzchar(candidate_values)] <- NA_character_
+
+        replace_idx <- is.na(display_names) & !is.na(candidate_values)
+        display_names[replace_idx] <- candidate_values[replace_idx]
+      }
+
+      missing_idx <- is.na(display_names) | !nzchar(display_names)
+      display_names[missing_idx] <- as.character(fallback_names)[missing_idx]
+
+      display_names
+    }
+
+    # Map the top-level `group` column to the assay samples using the sample map
     primary_lookup <- as.character(MultiAssayExperiment::colData(object)$group)
     names(primary_lookup) <- rownames(col_data)
 
@@ -226,6 +270,7 @@ methods::setMethod(
       stop("`colData(object)` must have valid row names for group matching.", call. = FALSE)
     }
 
+    # Map the assay column names back to the top-level `colData(object)` row names using the sample map
     assay_primary_ids <- assay_map$primary[match(colnames(response), as.character(assay_map$colname))]
 
     if (anyNA(assay_primary_ids)) {
@@ -234,6 +279,11 @@ methods::setMethod(
         call. = FALSE
       )
     }
+
+
+    # Now we have the assay sample IDs, we can extract the corresponding group labels and display names
+    sample_metadata <- as.data.frame(col_data[assay_primary_ids, , drop = FALSE], stringsAsFactors = FALSE)
+    sample_display_names <- .resolve_sample_display_names(sample_metadata, colnames(response))
 
     assay_groups <- primary_lookup[assay_primary_ids]
 
@@ -246,6 +296,7 @@ methods::setMethod(
         " assay sample(s) without a group assignment in `colData(object)`."
       )
       assay_groups <- assay_groups[assigned_idx]
+      sample_display_names <- sample_display_names[assigned_idx]
       response <- response[, assigned_idx, drop = FALSE]
     }
 
@@ -256,6 +307,7 @@ methods::setMethod(
       )
     }
 
+    # Identify the indices of the two groups in the assay
     group1_idx <- which(assay_groups == group1_key)
     group2_idx <- which(assay_groups == group2_key)
 
@@ -266,6 +318,7 @@ methods::setMethod(
       )
     }
 
+    # Extract the response values for the two groups
     response1 <- response[, group1_idx, drop = FALSE]
     response2 <- response[, group2_idx, drop = FALSE]
 
@@ -276,6 +329,7 @@ methods::setMethod(
       )
     }
 
+    # ----- Run calculations for each feature (drug) -----
     common_features <- rownames(response)
 
     n_group1 <- rowSums(!is.na(response1))
@@ -360,15 +414,20 @@ methods::setMethod(
       dplyr::mutate(
         neg_log10_p = -log10(.data$p_value),
         significant = !is.na(.data$p_adj) & .data$p_adj < 0.05 & abs(.data$mean_diff) > effect_threshold
-      ) |>
-      dplyr::arrange(.data$p_value)
+      ) |> # mutate the feature label for volcano plot labeling, prefer drug_name, then compound_id, then feature_id
+      dplyr::arrange(.data$p_value) # sort by p-value for easier interpretation
 
+    # Constructs a new `DrugSensitivityComparison` object with the computed statistics and
+    # metadata for plotting and reporting.
+    # This object-oriented approach allows users to do additional user-friendly
+    # operations on the results, such as export(DrugSensitivityComparison) to an Excel workbook with a volcano plot.
     methods::new(
       "DrugSensitivityComparison",
       stats = results,
       plot_data = list(
         response = response,
         sample_groups = assay_groups,
+        sample_labels = sample_display_names,
         feature_ids = common_features,
         group1_idx = group1_idx,
         group2_idx = group2_idx,
