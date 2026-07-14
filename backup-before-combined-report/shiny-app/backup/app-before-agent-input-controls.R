@@ -24,8 +24,6 @@ library(readr)
 library(dplyr)
 library(DT)
 source("results_helpers.R", local = TRUE)
-source("real_pipeline.R", local = TRUE)
-source("agent_inputs.R", local = TRUE)
 
 read_uploaded_dataset <- function(file_path, file_name) {
   extension <- tolower(tools::file_ext(file_name))
@@ -61,7 +59,7 @@ ui <- fluidPage(
     tags$link(
       rel = "stylesheet",
       type = "text/css",
-      href = "styles.css?v=agent-input-controls-v1"
+      href = "styles.css?v=interpretation-v2"
     ),
     tags$script(src = "status.js")
   ),
@@ -207,8 +205,6 @@ ui <- fluidPage(
         )
       )
     ),
-
-    agent_input_control_ui(),
 
     div(
       class = "agents-workspace glass-card",
@@ -407,15 +403,11 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  register_results_server(input, output, session)
+  register_results_server(output, session)
 
 
   dataset_data <- reactiveVal(NULL)
   dataset_error <- reactiveVal(NULL)
-
-  dataset_profile <- reactive({
-    detect_agent_compatibility(dataset_data())
-  })
   completed_agents <- reactiveVal(0L)
   analysis_start_time <- reactiveVal(NULL)
   analysis_runtime_seconds <- reactiveVal(0L)
@@ -423,10 +415,6 @@ server <- function(input, output, session) {
   analysis_log_value <- reactiveVal(
     "[WAITING] Validate a dataset to enable the analysis agents."
   )
-  real_workers <- reactiveVal(list())
-  real_pipeline_running <- reactiveVal(FALSE)
-  real_pipeline_finished <- reactiveVal(FALSE)
-
 
   send_agent_status <- function(agent, status, message) {
     session$sendCustomMessage(
@@ -521,118 +509,6 @@ server <- function(input, output, session) {
     )
   })
 
-  output$detected_dataset_summary <- renderUI({
-    profile <- dataset_profile()
-
-    div(
-      class = "detected-dataset-summary",
-
-      div(
-        class = "detected-summary-item",
-        span("Detected type"),
-        strong(profile$dataset_type)
-      ),
-
-      div(
-        class = "detected-summary-item",
-        span("Gene identifier"),
-        strong(
-          if (is.null(profile$gene_column)) {
-            "Not detected"
-          } else {
-            profile$gene_column
-          }
-        )
-      ),
-
-      div(
-        class = "detected-summary-item",
-        span("Numeric samples"),
-        strong(profile$sample_count)
-      )
-    )
-  })
-
-  output$selected_agent_summary <- renderUI({
-    selected <- c(
-      go = isTRUE(input$enable_go),
-      kegg = isTRUE(input$enable_kegg),
-      gsva = isTRUE(input$enable_gsva),
-      chea = isTRUE(input$enable_chea)
-    )
-
-    compatible <- dataset_profile()$agent_compatibility
-
-    valid_selected <- selected & compatible
-
-    div(
-      class = "selected-agent-summary",
-      span(class = "selected-agent-dot"),
-      strong(sum(valid_selected)),
-      span("compatible agents selected")
-    )
-  })
-
-  for (agent_key in names(agent_requirements)) {
-    local({
-      key <- agent_key
-
-      output[[paste0(key, "_compatibility")]] <- renderUI({
-        profile <- dataset_profile()
-        compatible <- isTRUE(
-          profile$agent_compatibility[[key]]
-        )
-
-        div(
-          class = paste(
-            "agent-compatibility",
-            if (compatible) {
-              "agent-compatible"
-            } else {
-              "agent-incompatible"
-            }
-          ),
-
-          span(
-            class = "agent-compatibility-dot"
-          ),
-
-          div(
-            strong(
-              if (compatible) {
-                "Compatible"
-              } else {
-                "Not compatible"
-              }
-            ),
-            span(profile$messages[[key]])
-          )
-        )
-      })
-    })
-  }
-
-  observe({
-    profile <- dataset_profile()
-
-    for (agent_key in names(agent_requirements)) {
-      compatible <- isTRUE(
-        profile$agent_compatibility[[agent_key]]
-      )
-
-      shinyjs_state <- compatible &&
-        !is.null(dataset_data())
-
-      session$sendCustomMessage(
-        "agent-input-state",
-        list(
-          agent = agent_key,
-          enabled = shinyjs_state
-        )
-      )
-    }
-  })
-
   output$uploaded_file_details <- renderUI({
     if (is.null(input$dataset)) {
       return(
@@ -687,10 +563,6 @@ server <- function(input, output, session) {
           input$dataset$name
         )
 
-        loaded_data <- normalize_uploaded_genomic_data(
-          loaded_data
-        )
-
         if (nrow(loaded_data) == 0) {
           stop("The uploaded dataset has no data rows.")
         }
@@ -719,6 +591,9 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$run_analysis, {
+    completed_agents(0L)
+    analysis_start_time(Sys.time())
+    analysis_runtime_seconds(0L)
 
     data <- dataset_data()
 
@@ -732,76 +607,16 @@ server <- function(input, output, session) {
       return()
     }
 
-    if (isTRUE(real_pipeline_running())) {
-      showNotification(
-        "An analysis is already running.",
-        type = "warning",
-        duration = 5
-      )
-
-      return()
-    }
-
-    profile <- dataset_profile()
-
-    requested_agents <- c(
-      go = isTRUE(input$enable_go),
-      kegg = isTRUE(input$enable_kegg),
-      gsva = isTRUE(input$enable_gsva),
-      chea = isTRUE(input$enable_chea)
-    )
-
-    compatible_agents <- vapply(
-      names(requested_agents),
-      function(agent) {
-        isTRUE(
-          profile$agent_compatibility[[agent]]
-        )
-      },
-      logical(1)
-    )
-
-    selected_agents <- names(
-      requested_agents[
-        requested_agents &
-          compatible_agents
-      ]
-    )
-
-    if (length(selected_agents) == 0) {
-      showNotification(
-        paste(
-          "Select at least one compatible analysis agent",
-          "before starting the pipeline."
-        ),
-        type = "warning",
-        duration = 7
-      )
-
-      return()
-    }
-
-    completed_agents(0L)
-    analysis_start_time(Sys.time())
-    analysis_runtime_seconds(0L)
-
-    real_pipeline_running(TRUE)
-    real_pipeline_finished(FALSE)
-
     analysis_log_value(
       paste0(
-        "[START] Real multi-agent analysis initialized.\n",
+        "[START] Four-agent analysis initialized.\n",
         "[DATASET] ",
         input$dataset$name,
         "\n[DIMENSIONS] ",
         format(nrow(data), big.mark = ","),
         " rows × ",
         format(ncol(data), big.mark = ","),
-        " columns\n[AGENTS] ",
-        paste(
-          toupper(selected_agents),
-          collapse = ", "
-        )
+        " columns"
       )
     )
 
@@ -809,319 +624,106 @@ server <- function(input, output, session) {
       type = "agent-status",
       message = list(
         pipeline = "running",
-        pipeline_message = paste(
-          length(selected_agents),
-          "real analysis agents running"
-        )
+        pipeline_message = "Four-agent analysis running"
       )
     )
 
-    all_agents <- c(
-      "go",
-      "kegg",
-      "gsva",
-      "chea"
+    agent_plan <- list(
+      list(
+        agent = "go",
+        running = "Mapping genes to GO Biological Process terms...",
+        completed = "GO enrichment analysis completed."
+      ),
+      list(
+        agent = "kegg",
+        running = "Testing genes against KEGG pathways...",
+        completed = paste(
+          "KEGG analysis completed.",
+          "Zero significant pathways is a valid possible result."
+        )
+      ),
+      list(
+        agent = "gsva",
+        running = "Calculating Hallmark pathway activity scores...",
+        completed = "GSVA pathway scoring completed."
+      ),
+      list(
+        agent = "chea",
+        running = "Querying transcription-factor enrichment...",
+        completed = "ChEA regulator analysis completed."
+      )
     )
 
-    for (agent in all_agents) {
-      if (agent %in% selected_agents) {
-        send_agent_status(
-          agent,
-          "waiting",
-          "Preparing real analysis worker."
-        )
-      } else {
-        send_agent_status(
-          agent,
-          "waiting",
-          "Not selected for this analysis."
-        )
-      }
+    for (plan in agent_plan) {
+      send_agent_status(
+        plan$agent,
+        "waiting",
+        "Queued and waiting for execution."
+      )
     }
 
-    analysis_run <- tryCatch(
-      create_real_analysis_run(data),
-      error = function(error) {
-        real_pipeline_running(FALSE)
-
-        append_analysis_log(
-          paste(
-            "Unable to prepare the real analysis run:",
-            conditionMessage(error)
+    run_agent_stage <- function(index) {
+      if (index > length(agent_plan)) {
+        session$sendCustomMessage(
+          type = "agent-status",
+          message = list(
+            pipeline = "completed",
+            pipeline_message = "All four agents completed"
           )
         )
 
-        showNotification(
-          conditionMessage(error),
-          type = "error",
-          duration = 10
+        append_analysis_log(
+          "Four-agent analysis completed successfully."
         )
 
-        return(NULL)
+        showNotification(
+          "All four analysis agents completed.",
+          type = "message",
+          duration = 6
+        )
+
+        return(invisible(NULL))
       }
-    )
 
-    if (is.null(analysis_run)) {
-      return()
-    }
-
-    workers <- list()
-
-    for (agent in selected_agents) {
+      plan <- agent_plan[[index]]
 
       send_agent_status(
-        agent,
+        plan$agent,
         "running",
-        paste(
-          "Running real",
-          toupper(agent),
-          "analysis..."
-        )
+        plan$running
       )
 
       append_analysis_log(
         paste(
-          toupper(agent),
-          "worker started."
+          toupper(plan$agent),
+          "Agent:",
+          plan$running
         )
       )
 
-      worker <- tryCatch(
-        start_real_agent_worker(
-          agent = agent,
-          analysis_run = analysis_run,
-          pvalue_cutoff = 0.05
-        ),
-        error = function(error) {
-          list(
-            agent = agent,
-            launch_error = conditionMessage(error),
-            handled = FALSE
+      later::later(
+        function() {
+          send_agent_status(
+            plan$agent,
+            "completed",
+            plan$completed
           )
-        }
-      )
 
-      worker$handled <- FALSE
-      workers[[agent]] <- worker
-    }
-
-    real_workers(workers)
-  })
-
-
-  observe({
-
-    if (!isTRUE(real_pipeline_running())) {
-      return()
-    }
-
-    invalidateLater(
-      750,
-      session
-    )
-
-    workers <- real_workers()
-
-    if (length(workers) == 0) {
-      return()
-    }
-
-    state_changed <- FALSE
-
-    for (agent in names(workers)) {
-
-      worker <- workers[[agent]]
-
-      if (isTRUE(worker$handled)) {
-        next
-      }
-
-      if (!is.null(worker$launch_error)) {
-
-        send_agent_status(
-          agent,
-          "error",
-          worker$launch_error
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "worker could not start:",
-            worker$launch_error
+          append_analysis_log(
+            paste(
+              toupper(plan$agent),
+              "Agent:",
+              plan$completed
+            )
           )
-        )
 
-        worker$handled <- TRUE
-        workers[[agent]] <- worker
-        state_changed <- TRUE
-
-        next
-      }
-
-      process_alive <- tryCatch(
-        worker$process$is_alive(),
-        error = function(error) {
-          FALSE
-        }
-      )
-
-      result_ready <- file.exists(
-        worker$result_file
-      )
-
-      if (process_alive && !result_ready) {
-        next
-      }
-
-      result <- read_real_worker_result(
-        worker
-      )
-
-      if (is.null(result)) {
-        next
-      }
-
-      if (isTRUE(result$success)) {
-
-        completed_agents(
-          completed_agents() + 1L
-        )
-
-        send_agent_status(
-          agent,
-          "completed",
-          paste0(
-            toupper(agent),
-            " completed with ",
-            format(
-              result$rows,
-              big.mark = ","
-            ),
-            " result rows."
-          )
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "Agent completed:",
-            result$message
-          )
-        )
-
-      } else {
-
-        send_agent_status(
-          agent,
-          "error",
-          result$message
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "Agent failed:",
-            result$message
-          )
-        )
-      }
-
-      worker$handled <- TRUE
-      worker$result <- result
-      workers[[agent]] <- worker
-      state_changed <- TRUE
-    }
-
-    if (state_changed) {
-      real_workers(workers)
-    }
-
-    all_finished <- length(workers) > 0 &&
-      all(
-        vapply(
-          workers,
-          function(worker) {
-            isTRUE(worker$handled)
-          },
-          logical(1)
-        )
-      )
-
-    if (!all_finished) {
-      return()
-    }
-
-    real_pipeline_running(FALSE)
-    real_pipeline_finished(TRUE)
-
-    successful_agents <- sum(
-      vapply(
-        workers,
-        function(worker) {
-          !is.null(worker$result) &&
-            isTRUE(worker$result$success)
+          run_agent_stage(index + 1)
         },
-        logical(1)
-      )
-    )
-
-    failed_agents <- length(workers) -
-      successful_agents
-
-    analysis_runtime_seconds(
-      as.integer(
-        difftime(
-          Sys.time(),
-          analysis_start_time(),
-          units = "secs"
-        )
-      )
-    )
-
-    pipeline_message <- if (failed_agents == 0) {
-      paste(
-        "All",
-        successful_agents,
-        "selected agents completed"
-      )
-    } else {
-      paste(
-        successful_agents,
-        "completed and",
-        failed_agents,
-        "failed"
+        delay = 1.2
       )
     }
 
-    session$sendCustomMessage(
-      type = "agent-status",
-      message = list(
-        pipeline = if (failed_agents == 0) {
-          "completed"
-        } else {
-          "error"
-        },
-        pipeline_message = pipeline_message
-      )
-    )
-
-    append_analysis_log(
-      paste(
-        "Real multi-agent analysis finished.",
-        pipeline_message
-      )
-    )
-
-    showNotification(
-      pipeline_message,
-      type = if (failed_agents == 0) {
-        "message"
-      } else {
-        "warning"
-      },
-      duration = 8
-    )
+    run_agent_stage(1)
   })
 
   observe({

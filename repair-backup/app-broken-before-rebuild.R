@@ -1,3 +1,5 @@
+options(shiny.maxRequestSize = 500 * 1024^2)
+
 options(
   shiny.maxRequestSize = 1024 * 1024^2,
   repos = c(CRAN = "https://cloud.r-project.org")
@@ -57,6 +59,7 @@ read_uploaded_dataset <- function(file_path, file_name) {
 
 ui <- fluidPage(
   tags$head(
+    tags$script(src = "custom-upload-fix.js"),
     tags$title("OncoProfiling Tools"),
     tags$link(
       rel = "stylesheet",
@@ -407,7 +410,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  register_results_server(input, output, session)
+  register_results_server(output, session)
 
 
   dataset_data <- reactiveVal(NULL)
@@ -665,58 +668,86 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$validate_dataset, {
+    req(input$dataset)
 
     dataset_error(NULL)
-    dataset_data(NULL)
-
-    if (is.null(input$dataset)) {
-      dataset_error("Upload a dataset before validation.")
-
-      showNotification(
-        "Please upload a dataset first.",
-        type = "warning"
-      )
-
-      return()
-    }
 
     tryCatch(
       {
+        uploaded_path <- input$dataset$datapath
+        uploaded_name <- input$dataset$name
+
+        if (
+          is.null(uploaded_path) ||
+          !nzchar(uploaded_path) ||
+          !file.exists(uploaded_path)
+        ) {
+          stop("The uploaded temporary file is unavailable. Please upload it again.")
+        }
+
         loaded_data <- read_uploaded_dataset(
-          input$dataset$datapath,
-          input$dataset$name
+          uploaded_path,
+          uploaded_name
         )
 
-        loaded_data <- normalize_uploaded_genomic_data(
-          loaded_data
-        )
+        if (is.null(loaded_data)) {
+          stop("The dataset reader returned no data.")
+        }
 
-        if (nrow(loaded_data) == 0) {
+        if (nrow(loaded_data) == 0L) {
           stop("The uploaded dataset has no data rows.")
         }
 
-        if (ncol(loaded_data) == 0) {
+        if (ncol(loaded_data) == 0L) {
           stop("The uploaded dataset has no columns.")
         }
 
         dataset_data(loaded_data)
 
+        analysis_log_value(
+          paste0(
+            "[VALIDATED] ",
+            uploaded_name,
+            "\n[DIMENSIONS] ",
+            format(nrow(loaded_data), big.mark = ","),
+            " rows × ",
+            format(ncol(loaded_data), big.mark = ","),
+            " columns"
+          )
+        )
+
+        session$sendCustomMessage(
+          type = "agent-status",
+          message = list(
+            pipeline = "ready",
+            pipeline_message = "Dataset validated — select compatible agents"
+          )
+        )
+
         showNotification(
-          "Dataset validated successfully.",
-          type = "message"
+          paste(
+            "Dataset validated:",
+            format(nrow(loaded_data), big.mark = ","),
+            "rows and",
+            format(ncol(loaded_data), big.mark = ","),
+            "columns."
+          ),
+          type = "message",
+          duration = 8
         )
       },
       error = function(error) {
+        dataset_data(NULL)
         dataset_error(conditionMessage(error))
 
         showNotification(
           conditionMessage(error),
           type = "error",
-          duration = 8
+          duration = 10
         )
       }
     )
-  })
+  }, ignoreInit = TRUE)
 
   observeEvent(input$run_analysis, {
 

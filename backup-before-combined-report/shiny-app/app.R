@@ -407,7 +407,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  register_results_server(input, output, session)
+  register_results_server(output, session)
 
 
   dataset_data <- reactiveVal(NULL)

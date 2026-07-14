@@ -16,9 +16,7 @@ find_project_root <- function() {
     mustWork = TRUE
   )
 
-  if (
-    basename(current_directory) == "shiny-app"
-  ) {
+  if (basename(current_directory) == "shiny-app") {
     return(
       normalizePath(
         file.path(current_directory, ".."),
@@ -27,21 +25,7 @@ find_project_root <- function() {
     )
   }
 
-  if (
-    dir.exists(
-      file.path(current_directory, "shiny-app")
-    )
-  ) {
-    return(current_directory)
-  }
-
-  stop(
-    paste(
-      "Could not locate the OncoProfilingTools project root from:",
-      current_directory
-    ),
-    call. = FALSE
-  )
+  current_directory
 }
 
 real_agent_project_root <- find_project_root()
@@ -837,14 +821,10 @@ execute_chea_agent <- function(
     showWarnings = FALSE
   )
 
-  # Attach enrichR so its connection options are initialized.
-  suppressPackageStartupMessages(
-    library(enrichR)
+  enrichR::setEnrichrSite(
+    "Enrichr"
   )
 
-  # Human Enrichr is the default site after package initialization.
-  # Avoid setEnrichrSite() here because background workers may not
-  # have enrichR.sites.base.address initialized before attachment.
   result <- run_chea_agent(
     genes = genes,
     database = "ChEA_2022"
@@ -1079,184 +1059,4 @@ run_selected_real_agent <- function(
       )
     }
   )
-}
-
-
-# Final GSVA orientation override:
-# Always returns genes in rows and samples in columns.
-prepare_expression_matrix <- function(data, ...) {
-
-  data <- as.data.frame(
-    data,
-    check.names = FALSE,
-    stringsAsFactors = FALSE
-  )
-
-  if (nrow(data) == 0 || ncol(data) == 0) {
-    stop("Expression dataset is empty.")
-  }
-
-  original_names <- names(data)
-
-  normalized_names <- tolower(
-    gsub(
-      "[^a-z0-9]+",
-      "_",
-      original_names
-    )
-  )
-
-  gene_candidates <- c(
-    "gene_symbol",
-    "gene",
-    "genes",
-    "symbol",
-    "gene_name",
-    "hgnc_symbol"
-  )
-
-  gene_index <- which(
-    normalized_names %in% gene_candidates
-  )
-
-  numeric_index <- which(
-    vapply(
-      data,
-      function(column) {
-        is.numeric(column) ||
-          sum(
-            !is.na(
-              suppressWarnings(
-                as.numeric(as.character(column))
-              )
-            )
-          ) >= max(5, floor(length(column) * 0.8))
-      },
-      logical(1)
-    )
-  )
-
-  if (length(gene_index) > 0) {
-
-    gene_index <- gene_index[[1]]
-
-    sample_index <- setdiff(
-      numeric_index,
-      gene_index
-    )
-
-    if (length(sample_index) < 2) {
-      stop(
-        "GSVA requires at least two numeric sample columns."
-      )
-    }
-
-    genes <- as.character(
-      data[[gene_index]]
-    )
-
-    expression_matrix <- as.matrix(
-      data[, sample_index, drop = FALSE]
-    )
-
-    storage.mode(expression_matrix) <- "numeric"
-
-    rownames(expression_matrix) <- genes
-
-  } else {
-
-    # Handle a matrix stored as samples × genes.
-    expression_matrix <- as.matrix(data)
-    storage.mode(expression_matrix) <- "numeric"
-
-    if (nrow(expression_matrix) < ncol(expression_matrix)) {
-      expression_matrix <- t(expression_matrix)
-    }
-  }
-
-  genes <- rownames(expression_matrix)
-
-  if (
-    is.null(genes) ||
-    all(grepl("^[0-9]+$", genes))
-  ) {
-    stop(
-      paste(
-        "GSVA could not find gene symbols.",
-        "The gene-symbol column must be named gene_symbol,",
-        "gene, symbol, gene_name, or hgnc_symbol."
-      )
-    )
-  }
-
-  genes <- trimws(
-    sub(
-      "\\s*\\([^)]*\\)\\s*$",
-      "",
-      genes
-    )
-  )
-
-  genes <- toupper(genes)
-
-  valid_rows <- (
-    !is.na(genes) &
-      nzchar(genes) &
-      rowSums(is.finite(expression_matrix)) > 0
-  )
-
-  expression_matrix <- expression_matrix[
-    valid_rows,
-    ,
-    drop = FALSE
-  ]
-
-  genes <- genes[valid_rows]
-
-  # Average duplicated genes instead of adding .1/.2 suffixes.
-  if (anyDuplicated(genes)) {
-
-    summed <- rowsum(
-      expression_matrix,
-      group = genes,
-      reorder = FALSE,
-      na.rm = TRUE
-    )
-
-    counts <- table(genes)[rownames(summed)]
-
-    expression_matrix <- summed /
-      as.numeric(counts)
-
-  } else {
-    rownames(expression_matrix) <- genes
-  }
-
-  expression_matrix[
-    !is.finite(expression_matrix)
-  ] <- NA_real_
-
-  keep_rows <- rowSums(
-    !is.na(expression_matrix)
-  ) >= 2
-
-  expression_matrix <- expression_matrix[
-    keep_rows,
-    ,
-    drop = FALSE
-  ]
-
-  if (nrow(expression_matrix) < 10) {
-    stop(
-      "Too few valid gene rows remain for GSVA."
-    )
-  }
-
-  if (ncol(expression_matrix) < 2) {
-    stop(
-      "Too few numeric sample columns remain for GSVA."
-    )
-  }
-
-  expression_matrix
 }

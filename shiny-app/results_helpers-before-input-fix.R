@@ -573,7 +573,7 @@ build_agent_interpretation <- function(agent_id, data) {
   )
 }
 
-register_results_server <- function(input, output, session) {
+register_results_server <- function(output, session) {
 
   agent_titles <- c(
     go = "GO",

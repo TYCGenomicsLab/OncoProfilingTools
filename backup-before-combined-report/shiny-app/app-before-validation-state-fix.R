@@ -1,3 +1,5 @@
+options(shiny.maxRequestSize = 500 * 1024^2)
+
 options(
   shiny.maxRequestSize = 1024 * 1024^2,
   repos = c(CRAN = "https://cloud.r-project.org")
@@ -57,6 +59,7 @@ read_uploaded_dataset <- function(file_path, file_name) {
 
 ui <- fluidPage(
   tags$head(
+    tags$script(src = "custom-upload-fix.js"),
     tags$title("OncoProfiling Tools"),
     tags$link(
       rel = "stylesheet",
@@ -407,7 +410,7 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  register_results_server(input, output, session)
+  register_results_server(output, session)
 
 
   dataset_data <- reactiveVal(NULL)
@@ -685,10 +688,6 @@ server <- function(input, output, session) {
         loaded_data <- read_uploaded_dataset(
           input$dataset$datapath,
           input$dataset$name
-        )
-
-        loaded_data <- normalize_uploaded_genomic_data(
-          loaded_data
         )
 
         if (nrow(loaded_data) == 0) {

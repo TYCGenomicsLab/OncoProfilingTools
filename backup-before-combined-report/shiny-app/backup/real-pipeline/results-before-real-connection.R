@@ -74,188 +74,6 @@ safe_result_csv <- function(path) {
   )
 }
 
-
-html_escape_value <- function(value) {
-  htmltools::htmlEscape(as.character(if (is.null(value)) "" else value))
-}
-
-image_data_uri <- function(path) {
-  if (!file.exists(path) || !requireNamespace("base64enc", quietly = TRUE)) {
-    return(NULL)
-  }
-
-  mime_type <- switch(
-    tolower(tools::file_ext(path)),
-    png = "image/png",
-    jpg = "image/jpeg",
-    jpeg = "image/jpeg",
-    "application/octet-stream"
-  )
-
-  paste0(
-    "data:", mime_type, ";base64,",
-    base64enc::base64encode(path)
-  )
-}
-
-result_summary_rows <- function() {
-  keys <- names(result_files)
-
-  do.call(
-    rbind,
-    lapply(keys, function(key) {
-      csv_path <- result_files[[key]]$csv
-      plot_path <- result_files[[key]]$plot
-      data <- safe_result_csv(csv_path)
-
-      data.frame(
-        Agent = toupper(key),
-        Status = if (!file.exists(csv_path)) {
-          "Not generated"
-        } else if (nrow(data) == 0) {
-          "Completed — 0 significant rows"
-        } else {
-          "Completed"
-        },
-        Rows = nrow(data),
-        Plot = if (file.exists(plot_path)) "Available" else "Not available",
-        stringsAsFactors = FALSE
-      )
-    })
-  )
-}
-
-build_combined_html_report <- function(destination) {
-  titles <- c(go = "GO", kegg = "KEGG", gsva = "GSVA", chea = "ChEA")
-  generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
-  summary_data <- result_summary_rows()
-
-  summary_rows <- paste0(
-    apply(summary_data, 1, function(row) {
-      paste0(
-        "<tr><td><strong>", html_escape_value(row[["Agent"]]), "</strong></td>",
-        "<td>", html_escape_value(row[["Status"]]), "</td>",
-        "<td>", html_escape_value(row[["Rows"]]), "</td>",
-        "<td>", html_escape_value(row[["Plot"]]), "</td></tr>"
-      )
-    }),
-    collapse = "\n"
-  )
-
-  sections <- vapply(names(result_files), function(key) {
-    csv_path <- result_files[[key]]$csv
-    plot_path <- result_files[[key]]$plot
-    data <- safe_result_csv(csv_path)
-    title <- titles[[key]]
-    image_uri <- image_data_uri(plot_path)
-
-    image_html <- if (!is.null(image_uri)) {
-      paste0(
-        "<figure><img src='", image_uri, "' alt='", title,
-        " visualization'><figcaption>", title,
-        " visualization</figcaption></figure>"
-      )
-    } else {
-      "<div class='empty'>Visualization not available.</div>"
-    }
-
-    table_html <- if (nrow(data) > 0) {
-      preview <- utils::head(data, 25)
-      header <- paste0(
-        "<tr>",
-        paste0("<th>", html_escape_value(names(preview)), "</th>", collapse = ""),
-        "</tr>"
-      )
-      body <- paste0(
-        apply(preview, 1, function(row) {
-          paste0(
-            "<tr>",
-            paste0("<td>", html_escape_value(row), "</td>", collapse = ""),
-            "</tr>"
-          )
-        }),
-        collapse = "\n"
-      )
-      paste0(
-        "<div class='table-wrap'><table><thead>", header,
-        "</thead><tbody>", body, "</tbody></table></div>",
-        if (nrow(data) > 25) {
-          paste0("<p class='note'>Showing the first 25 of ", format(nrow(data), big.mark = ","), " rows. The complete CSV is included in the download bundle.</p>")
-        } else ""
-      )
-    } else if (file.exists(csv_path)) {
-      "<div class='empty'>The agent completed successfully but returned zero significant rows.</div>"
-    } else {
-      "<div class='empty'>Results have not been generated.</div>"
-    }
-
-    paste0(
-      "<section><h2>", title, " Analysis</h2>",
-      "<p class='section-copy'>", html_escape_value(
-        switch(key,
-          go = "Gene Ontology biological-process enrichment.",
-          kegg = "KEGG pathway enrichment.",
-          gsva = "Hallmark pathway activity across samples.",
-          chea = "Transcription-factor enrichment from ChEA."
-        )
-      ), "</p>",
-      image_html,
-      "<h3>Top results</h3>", table_html,
-      "</section>"
-    )
-  }, character(1))
-
-  html <- paste0(
-    "<!doctype html><html><head><meta charset='utf-8'>",
-    "<meta name='viewport' content='width=device-width,initial-scale=1'>",
-    "<title>OncoProfiling Combined Analysis Report</title>",
-    "<style>",
-    "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;background:#07111f;color:#e8eef7;line-height:1.55}",
-    ".page{max-width:1180px;margin:auto;padding:40px 28px 80px}",
-    ".hero,section{background:#0d1b2d;border:1px solid #20324a;border-radius:18px;padding:28px;margin-bottom:24px;box-shadow:0 18px 50px rgba(0,0,0,.24)}",
-    "h1{font-size:34px;margin:0 0 8px}h2{font-size:25px;margin-top:0}h3{margin-top:28px}",
-    ".muted,.note,.section-copy{color:#a9b8ca}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#123f38;color:#8df1cf;font-size:13px;font-weight:700}",
-    "figure{margin:22px 0}img{display:block;max-width:100%;max-height:720px;margin:auto;border-radius:12px;background:white}figcaption{text-align:center;color:#a9b8ca;margin-top:8px}",
-    ".table-wrap{overflow:auto;border:1px solid #263a54;border-radius:12px}table{border-collapse:collapse;width:100%;font-size:13px;background:#0a1727}th,td{padding:10px 12px;border-bottom:1px solid #1d3048;text-align:left;vertical-align:top;white-space:nowrap}th{background:#13243a;position:sticky;top:0}.empty{padding:20px;border:1px dashed #38506e;border-radius:12px;color:#a9b8ca}",
-    "</style></head><body><main class='page'>",
-    "<div class='hero'><span class='badge'>COMBINED REPORT</span>",
-    "<h1>OncoProfiling Multi-Agent Analysis</h1>",
-    "<p class='muted'>Generated ", html_escape_value(generated_at), ". This report combines GO, KEGG, GSVA, and ChEA outputs into one portable HTML document.</p>",
-    "<h3>Run summary</h3><div class='table-wrap'><table><thead><tr><th>Agent</th><th>Status</th><th>Rows</th><th>Plot</th></tr></thead><tbody>", summary_rows, "</tbody></table></div></div>",
-    paste0(sections, collapse = "\n"),
-    "</main></body></html>"
-  )
-
-  writeLines(html, destination, useBytes = TRUE)
-}
-
-create_results_bundle <- function(destination) {
-  temp_dir <- tempfile("oncoprofiling-results-")
-  dir.create(temp_dir, recursive = TRUE)
-  on.exit(unlink(temp_dir, recursive = TRUE, force = TRUE), add = TRUE)
-
-  report_path <- file.path(temp_dir, "OncoProfiling_Combined_Report.html")
-  build_combined_html_report(report_path)
-
-  copied <- c(report_path)
-  for (key in names(result_files)) {
-    for (kind in c("csv", "plot")) {
-      source_path <- result_files[[key]][[kind]]
-      if (file.exists(source_path)) {
-        target_name <- paste0(toupper(key), "_", basename(source_path))
-        target_path <- file.path(temp_dir, target_name)
-        file.copy(source_path, target_path, overwrite = TRUE)
-        copied <- c(copied, target_path)
-      }
-    }
-  }
-
-  old_wd <- getwd()
-  on.exit(setwd(old_wd), add = TRUE)
-  setwd(temp_dir)
-  utils::zip(destination, files = basename(copied), flags = "-j")
-}
-
 result_tab_ui <- function(key, title, description) {
   tabPanel(
     title,
@@ -272,16 +90,7 @@ result_tab_ui <- function(key, title, description) {
             h3(paste(title, "Visualization")),
             p(description)
           ),
-          div(
-            class = "result-heading-actions",
-            uiOutput(paste0(key, "_result_status")),
-            actionButton(
-              inputId = paste0("open_plot_", key),
-              label = "Full screen",
-              class = "result-fullscreen-button",
-              icon = icon("expand")
-            )
-          )
+          uiOutput(paste0(key, "_result_status"))
         ),
 
         uiOutput(paste0(key, "_result_plot")),
@@ -346,26 +155,11 @@ results_center_ui <- function() {
       ),
 
       div(
-        class = "results-center-actions",
-        div(
-          class = "results-ready-badge",
-          span(class = "results-ready-dot"),
-          "Saved outputs"
-        ),
-        downloadButton(
-          "download_combined_report",
-          "Combined HTML Report",
-          class = "results-action-button"
-        ),
-        downloadButton(
-          "download_all_results",
-          "Download All (.zip)",
-          class = "results-action-button results-action-primary"
-        )
+        class = "results-ready-badge",
+        span(class = "results-ready-dot"),
+        "Saved outputs"
       )
     ),
-
-    uiOutput("analysis_completion_banner"),
 
     tabsetPanel(
       id = "results_tabs",
@@ -573,7 +367,7 @@ build_agent_interpretation <- function(agent_id, data) {
   )
 }
 
-register_results_server <- function(input, output, session) {
+register_results_server <- function(output, session) {
 
   agent_titles <- c(
     go = "GO",
@@ -582,88 +376,12 @@ register_results_server <- function(input, output, session) {
     chea = "ChEA"
   )
 
-  output$analysis_completion_banner <- renderUI({
-    summary_data <- result_summary_rows()
-    completed <- sum(summary_data$Status != "Not generated")
-    total_rows <- sum(summary_data$Rows)
-
-    div(
-      class = paste(
-        "analysis-completion-banner",
-        if (completed == 4) "analysis-completion-complete" else "analysis-completion-partial"
-      ),
-      div(
-        class = "analysis-completion-icon",
-        if (completed == 4) "✓" else "↻"
-      ),
-      div(
-        h4(if (completed == 4) "Four-agent analysis outputs are ready" else "Analysis outputs are partially available"),
-        p(
-          paste0(
-            completed, " of 4 agents generated output files · ",
-            format(total_rows, big.mark = ","), " total result rows"
-          )
-        )
-      )
-    )
-  })
-
-  output$download_combined_report <- downloadHandler(
-    filename = function() {
-      paste0("OncoProfiling_Combined_Report_", format(Sys.Date(), "%Y%m%d"), ".html")
-    },
-    content = function(file) {
-      build_combined_html_report(file)
-    },
-    contentType = "text/html"
-  )
-
-  output$download_all_results <- downloadHandler(
-    filename = function() {
-      paste0("OncoProfiling_All_Results_", format(Sys.Date(), "%Y%m%d"), ".zip")
-    },
-    content = function(file) {
-      create_results_bundle(file)
-    },
-    contentType = "application/zip"
-  )
-
   for (agent_key in names(agent_titles)) {
     local({
       key <- agent_key
       title <- agent_titles[[key]]
       csv_path <- result_files[[key]]$csv
       plot_path <- result_files[[key]]$plot
-
-      observeEvent(input[[paste0("open_plot_", key)]], {
-        if (!file.exists(plot_path)) {
-          showNotification(paste(title, "visualization is not available yet."), type = "warning")
-          return()
-        }
-
-        relative_plot_path <- sub(
-          paste0("^", analysis_output_root, "/?"),
-          "",
-          plot_path
-        )
-
-        showModal(
-          modalDialog(
-            title = paste(title, "Visualization"),
-            tags$img(
-              src = paste0(
-                "analysis-output/", relative_plot_path,
-                "?v=", as.numeric(file.info(plot_path)$mtime)
-              ),
-              alt = paste(title, "analysis visualization"),
-              class = "result-modal-image"
-            ),
-            size = "l",
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          )
-        )
-      }, ignoreInit = TRUE)
 
       output[[paste0(key, "_result_status")]] <- renderUI({
         result_data <- safe_result_csv(csv_path)
