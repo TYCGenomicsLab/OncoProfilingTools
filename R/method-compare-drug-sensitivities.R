@@ -164,7 +164,7 @@ methods::setMethod(
       )
     }
 
-    
+
     assay_info <- .get_drug_response_assay(object)
     assay <- assay_info$assay # the actual DrugResponseAssay object
     assay_name <- assay_info$assay_name # the name of the assay in the MultiAssayExperiment
@@ -228,7 +228,7 @@ methods::setMethod(
       )
     }
 
-    # Helper function to resolve sample display names from the metadata, 
+    # Helper function to resolve sample display names from the metadata,
     # falling back to the assay column names if necessary
     # the sample display names are used for labeling points in the volcano plot and for reporting in the workbook
     .resolve_sample_display_names <- function(sample_metadata, fallback_names) {
@@ -306,7 +306,7 @@ methods::setMethod(
         call. = FALSE
       )
     }
- 
+
     # Identify the indices of the two groups in the assay
     group1_idx <- which(assay_groups == group1_key)
     group2_idx <- which(assay_groups == group2_key)
