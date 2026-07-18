@@ -201,12 +201,11 @@ if (
     !is.na(source_csv) &&
     file.exists(source_csv)
   ) {
-    if (
-  normalizePath(source_csv, mustWork = FALSE) !=
-    normalizePath(canonical_csv, mustWork = FALSE)
-) {
-  file.copy(source_csv, canonical_csv, overwrite = TRUE)
-}
+    file.copy(
+      source_csv,
+      canonical_csv,
+      overwrite = TRUE
+    )
   }
 
   if (
@@ -214,12 +213,11 @@ if (
     !is.na(source_plot) &&
     file.exists(source_plot)
   ) {
-    if (
-  normalizePath(source_plot, mustWork = FALSE) !=
-    normalizePath(canonical_plot, mustWork = FALSE)
-) {
-  file.copy(source_plot, canonical_plot, overwrite = TRUE)
-}
+    file.copy(
+      source_plot,
+      canonical_plot,
+      overwrite = TRUE
+    )
   }
 
   # Also recover paths returned inside the nested result object.

@@ -573,39 +573,7 @@ build_agent_interpretation <- function(agent_id, data) {
   )
 }
 
-
 register_results_server <- function(input, output, session) {
-
-  result_watch_paths <- unique(unlist(
-    lapply(
-      result_files,
-      function(agent_files) {
-        unname(unlist(agent_files, use.names = FALSE))
-      }
-    ),
-    use.names = FALSE
-  ))
-
-  result_signature <- shiny::reactivePoll(
-    intervalMillis = 750,
-    session = session,
-
-    checkFunc = function() {
-      information <- file.info(result_watch_paths)
-
-      paste(
-        file.exists(result_watch_paths),
-        information$size,
-        as.numeric(information$mtime),
-        collapse = "|"
-      )
-    },
-
-    valueFunc = function() {
-      Sys.time()
-    }
-  )
-
 
   agent_titles <- c(
     go = "GO",
@@ -615,7 +583,6 @@ register_results_server <- function(input, output, session) {
   )
 
   output$analysis_completion_banner <- renderUI({
-    result_signature()
     summary_data <- result_summary_rows()
     completed <- sum(summary_data$Status != "Not generated")
     total_rows <- sum(summary_data$Rows)
@@ -699,7 +666,6 @@ register_results_server <- function(input, output, session) {
       }, ignoreInit = TRUE)
 
       output[[paste0(key, "_result_status")]] <- renderUI({
-    result_signature()
         result_data <- safe_result_csv(csv_path)
 
         if (!file.exists(csv_path)) {
@@ -730,7 +696,6 @@ register_results_server <- function(input, output, session) {
       })
 
       output[[paste0(key, "_interpretation")]] <- renderUI({
-    result_signature()
         result_data <- safe_result_csv(csv_path)
 
         build_agent_interpretation(
@@ -740,7 +705,6 @@ register_results_server <- function(input, output, session) {
       })
 
       output[[paste0(key, "_result_plot")]] <- renderUI({
-    result_signature()
         if (!file.exists(plot_path)) {
           message_text <- if (
             key == "kegg" &&
@@ -784,7 +748,6 @@ register_results_server <- function(input, output, session) {
       })
 
       output[[paste0(key, "_result_table")]] <- renderDT({
-    result_signature()
         result_data <- safe_result_csv(csv_path)
 
         validate(

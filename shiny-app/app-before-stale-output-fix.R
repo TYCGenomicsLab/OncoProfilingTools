@@ -407,31 +407,6 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  clear_live_analysis_outputs <- function() {
-    live_files <- c(
-      file.path(project_root, "output", "cms4", "go_results.csv"),
-      file.path(project_root, "output", "visualizations", "go_biological_process_dotplot.png"),
-      file.path(project_root, "output", "cms4", "kegg_results.csv"),
-      file.path(project_root, "output", "visualizations", "kegg_pathway_dotplot.png"),
-      file.path(project_root, "output", "gsva_bowel", "gsva_hallmark_scores.csv"),
-      file.path(project_root, "output", "gsva_bowel", "gsva_hallmark_heatmap.png"),
-      file.path(project_root, "output", "chea_cms4", "chea_results.csv"),
-      file.path(project_root, "output", "chea_cms4", "chea_tf_dotplot.png")
-    )
-
-    existing_files <- live_files[file.exists(live_files)]
-
-    if (length(existing_files) > 0) {
-      unlink(existing_files, force = TRUE)
-    }
-  }
-
-  clear_live_analysis_outputs()
-
-  observeEvent(input$dataset, {
-    clear_live_analysis_outputs()
-  }, ignoreInit = TRUE)
-
   register_results_server(input, output, session)
 
 
@@ -441,20 +416,6 @@ server <- function(input, output, session) {
   dataset_profile <- reactive({
     detect_agent_compatibility(dataset_data())
   })
-  worker_result_succeeded <- function(worker) {
-    if (!is.list(worker)) {
-      return(FALSE)
-    }
-
-    result <- worker[["result"]]
-
-    if (!is.list(result)) {
-      return(FALSE)
-    }
-
-    isTRUE(result[["success"]])
-  }
-
   completed_agents <- reactiveVal(0L)
   analysis_start_time <- reactiveVal(NULL)
   analysis_runtime_seconds <- reactiveVal(0L)
@@ -1023,6 +984,10 @@ server <- function(input, output, session) {
 
       if (isTRUE(result$success)) {
 
+        completed_agents(
+          completed_agents() + 1L
+        )
+
         send_agent_status(
           agent,
           "completed",
@@ -1072,18 +1037,6 @@ server <- function(input, output, session) {
       real_workers(workers)
     }
 
-    successful_count <- sum(
-      vapply(
-        workers,
-        function(worker) {
-          worker_result_succeeded(worker)
-        },
-        logical(1)
-      )
-    )
-
-    completed_agents(successful_count)
-
     all_finished <- length(workers) > 0 &&
       all(
         vapply(
@@ -1102,50 +1055,19 @@ server <- function(input, output, session) {
     real_pipeline_running(FALSE)
     real_pipeline_finished(TRUE)
 
-    worker_successful_agents <- sum(
+    successful_agents <- sum(
       vapply(
         workers,
         function(worker) {
-          worker_result_succeeded(worker)
+          !is.null(worker$result) &&
+            isTRUE(worker$result$success)
         },
         logical(1)
       )
     )
 
-    file_successful_agents <- if (
-      exists("result_files", inherits = TRUE)
-    ) {
-      files_to_check <- get(
-        "result_files",
-        inherits = TRUE
-      )
-
-      sum(
-        vapply(
-          files_to_check,
-          function(agent_files) {
-            is.list(agent_files) &&
-              file.exists(agent_files[["csv"]]) &&
-              file.exists(agent_files[["plot"]])
-          },
-          logical(1)
-        )
-      )
-    } else {
-      0L
-    }
-
-    successful_agents <- max(
-      worker_successful_agents,
-      file_successful_agents
-    )
-
-    completed_agents(successful_agents)
-
-    failed_agents <- max(
-      0L,
-      length(workers) - successful_agents
-    )
+    failed_agents <- length(workers) -
+      successful_agents
 
     analysis_runtime_seconds(
       as.integer(
@@ -1207,11 +1129,7 @@ server <- function(input, output, session) {
 
     started <- analysis_start_time()
 
-    if (
-      !is.null(started) &&
-      isTRUE(real_pipeline_running()) &&
-      !isTRUE(real_pipeline_finished())
-    ) {
+    if (!is.null(started) && completed_agents() < 4L) {
       elapsed <- as.integer(
         difftime(
           Sys.time(),

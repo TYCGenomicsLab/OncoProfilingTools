@@ -1,4 +1,4 @@
-[10:51:52] Starting KEGG agent.
+[22:51:45] Starting KEGG agent.
 
 
 'select()' returned 1:many mapping between keys and columns
@@ -7,4 +7,4 @@ Reading KEGG annotation online: "https://rest.kegg.jp/list/pathway/hsa"...
 Warning message:
 In clusterProfiler::bitr(genes, fromType = "SYMBOL", toType = "ENTREZID",  :
   0.51% of input gene IDs are fail to map...
-[10:52:05] KEGG agent completed with 257 result rows.
+[22:52:02] KEGG agent completed with 257 result rows.

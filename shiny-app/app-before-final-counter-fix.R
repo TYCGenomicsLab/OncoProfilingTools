@@ -1102,50 +1102,30 @@ server <- function(input, output, session) {
     real_pipeline_running(FALSE)
     real_pipeline_finished(TRUE)
 
-    worker_successful_agents <- sum(
+    successful_agents <- sum(
       vapply(
         workers,
         function(worker) {
-          worker_result_succeeded(worker)
+          if (!is.list(worker)) {
+            return(FALSE)
+          }
+
+          result <- worker[["result"]]
+
+          if (!is.list(result)) {
+            return(FALSE)
+          }
+
+          isTRUE(result[["success"]])
         },
         logical(1)
       )
     )
 
-    file_successful_agents <- if (
-      exists("result_files", inherits = TRUE)
-    ) {
-      files_to_check <- get(
-        "result_files",
-        inherits = TRUE
-      )
-
-      sum(
-        vapply(
-          files_to_check,
-          function(agent_files) {
-            is.list(agent_files) &&
-              file.exists(agent_files[["csv"]]) &&
-              file.exists(agent_files[["plot"]])
-          },
-          logical(1)
-        )
-      )
-    } else {
-      0L
-    }
-
-    successful_agents <- max(
-      worker_successful_agents,
-      file_successful_agents
-    )
+    failed_agents <- length(workers) -
+      successful_agents
 
     completed_agents(successful_agents)
-
-    failed_agents <- max(
-      0L,
-      length(workers) - successful_agents
-    )
 
     analysis_runtime_seconds(
       as.integer(

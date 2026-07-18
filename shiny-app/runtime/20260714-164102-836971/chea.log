@@ -1,0 +1,7 @@
+[16:41:02] Starting CHEA agent.
+Uploading data to Enrichr... Done.
+  Querying ChEA_2022... Done.
+Parsing results... Done.
+[16:41:49] ChEA canonical CSV: /Users/bandaarjunreddy/Research/OncoProfilingTools/output/chea_cms4/chea_results.csv | exists=TRUE
+[16:41:49] ChEA canonical plot: /Users/bandaarjunreddy/Research/OncoProfilingTools/output/chea_cms4/chea_tf_dotplot.png | exists=TRUE
+[16:41:49] CHEA agent completed with 757 result rows.
