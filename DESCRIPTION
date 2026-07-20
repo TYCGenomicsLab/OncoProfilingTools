@@ -33,6 +33,11 @@ Suggests:
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
 Collate:
+    'agent-chea.R'
+    'agent-go.R'
+    'agent-gsva.R'
+    'agent-kegg.R'
+    'agent-report.R'
     'class-DrugResponseAssay.R'
     'class-ExpressionAssay.R'
     'class-MutationAssay.R'
