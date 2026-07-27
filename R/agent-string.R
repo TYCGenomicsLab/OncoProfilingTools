@@ -28,10 +28,10 @@ run_string_agent <- function(
 
   if (
     !is.numeric(score_threshold) ||
-    length(score_threshold) != 1L ||
-    is.na(score_threshold) ||
-    score_threshold < 0 ||
-    score_threshold > 1000
+      length(score_threshold) != 1L ||
+      is.na(score_threshold) ||
+      score_threshold < 0 ||
+      score_threshold > 1000
   ) {
     stop("score_threshold must be between 0 and 1000.", call. = FALSE)
   }
@@ -66,8 +66,8 @@ run_string_agent <- function(
 
   if (
     is.null(mapped_genes) ||
-    nrow(mapped_genes) == 0L ||
-    !"STRING_id" %in% colnames(mapped_genes)
+      nrow(mapped_genes) == 0L ||
+      !"STRING_id" %in% colnames(mapped_genes)
   ) {
     stop("No genes could be mapped to STRING identifiers.", call. = FALSE)
   }
@@ -81,11 +81,10 @@ run_string_agent <- function(
 
   if (
     nrow(interactions) > 0L &&
-    "combined_score" %in% colnames(interactions)
+      "combined_score" %in% colnames(interactions)
   ) {
     interactions <- interactions[
-      interactions$combined_score >= score_threshold,
-      ,
+      interactions$combined_score >= score_threshold, ,
       drop = FALSE
     ]
   }
@@ -95,7 +94,7 @@ run_string_agent <- function(
 
   if (
     nrow(interactions) > 0L &&
-    all(c("from", "to") %in% colnames(interactions))
+      all(c("from", "to") %in% colnames(interactions))
   ) {
     degree_values <- table(c(interactions$from, interactions$to))
 

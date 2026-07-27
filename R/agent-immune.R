@@ -65,8 +65,7 @@ run_immune_agent <- function(
     !duplicated(gene_names)
 
   expression_matrix <- expression_matrix[
-    keep_rows,
-    ,
+    keep_rows, ,
     drop = FALSE
   ]
 

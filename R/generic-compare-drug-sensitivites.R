@@ -313,7 +313,7 @@ export_compare_drug_sensitivities_workbook <- function(
         pch = 16,
         col = point_colors,
         xlab = sprintf("Mean difference (%s - %s)", group1_display, group2_display),
-        ylab = expression(-log[10](p-value)),
+        ylab = expression(-log[10](p - value)),
         main = sprintf("Drug sensitivity: %s vs %s", group1_display, group2_display)
       )
       graphics::abline(h = -log10(0.05), lty = 2, col = "gray55")
