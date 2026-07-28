@@ -46,6 +46,24 @@ result_files <- list(
       "chea_cms4",
       "chea_tf_dotplot.png"
     )
+  ),
+  reactome = list(
+    csv = file.path(analysis_output_root, "reactome", "reactome_results.csv"),
+    plot = file.path(analysis_output_root, "reactome", "reactome_pathways.png")
+  ),
+  wikipathways = list(csv = file.path(analysis_output_root, "wikipathways", "wikipathways_results.csv"), plot = file.path(analysis_output_root, "wikipathways", "wikipathways_pathways.png")),
+  string = list(
+    csv = file.path(analysis_output_root, "string", "string_hub_proteins.csv"),
+    plot = NA_character_
+  ),
+  hallmark = list(csv = file.path(analysis_output_root, "hallmark", "hallmark_results.csv"), plot = file.path(analysis_output_root, "hallmark", "hallmark_pathways.png")),
+  immune = list(
+    csv = file.path(analysis_output_root, "immune", "immune_cell_composition.csv"),
+    plot = NA_character_
+  ),
+  drug = list(
+    csv = file.path(analysis_output_root, "drug", "drug_sensitivity_results.csv"),
+    plot = NA_character_
   )
 )
 
@@ -126,7 +144,7 @@ result_summary_rows <- function() {
 }
 
 build_combined_html_report <- function(destination) {
-  titles <- c(go = "GO", kegg = "KEGG", gsva = "GSVA", chea = "ChEA")
+  titles <- c(go = "GO", kegg = "KEGG", gsva = "GSVA", chea = "ChEA", reactome = "Reactome", string = "STRING", immune = "Immune", drug = "Drug")
   generated_at <- format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
   summary_data <- result_summary_rows()
 
@@ -325,7 +343,10 @@ result_tab_ui <- function(key, title, description) {
   )
 }
 
-results_center_ui <- function() {
+agent_titles <- c(go="GO", kegg="KEGG", reactome="Reactome", wikipathways="WikiPathways", string="STRING", hallmark="Hallmark", chea="ChEA", gsva="GSVA", immune="Immune", drug="Drug")
+agent_descriptions <- c(go="Enriched Gene Ontology biological-process terms.", kegg="Significantly enriched molecular pathways.", reactome="Curated pathway enrichment.", wikipathways="Community pathway enrichment.", string="Protein interaction hub ranking.", hallmark="Cancer hallmark gene-set enrichment.", chea="Candidate transcription-factor regulators.", gsva="Sample-level pathway activity.", immune="Immune-cell composition estimates.", drug="Ranked compound sensitivity responses.")
+
+results_center_ui <- function(selected_agents = names(agent_titles)) {
   div(
     id = "results-center",
     class = "results-center glass-card",
@@ -339,7 +360,7 @@ results_center_ui <- function() {
         p(
           class = "section-description",
           paste(
-            "Explore generated outputs from GO, KEGG, GSVA, and ChEA.",
+            "Explore generated outputs from every selected scientific agent.",
             "Each agent has an independent visualization and result table."
           )
         )
@@ -367,34 +388,12 @@ results_center_ui <- function() {
 
     uiOutput("analysis_completion_banner"),
 
-    tabsetPanel(
-      id = "results_tabs",
-      type = "pills",
-
-      result_tab_ui(
-        "go",
-        "GO",
-        "Enriched Gene Ontology biological-process terms."
-      ),
-
-      result_tab_ui(
-        "kegg",
-        "KEGG",
-        "Significantly enriched molecular pathways."
-      ),
-
-      result_tab_ui(
-        "gsva",
-        "GSVA",
-        "Hallmark pathway activity across biological samples."
-      ),
-
-      result_tab_ui(
-        "chea",
-        "ChEA",
-        "Candidate transcription-factor regulators."
-      )
-    )
+    do.call(tabsetPanel, c(
+      list(id = "results_tabs", type = "pills"),
+      lapply(intersect(selected_agents, names(agent_titles)), function(key) {
+        result_tab_ui(key, agent_titles[[key]], agent_descriptions[[key]])
+      })
+    ))
   )
 }
 
@@ -574,7 +573,12 @@ build_agent_interpretation <- function(agent_id, data) {
 }
 
 
-register_results_server <- function(input, output, session) {
+register_results_server <- function(input, output, session, active_agents = NULL) {
+
+  active_keys <- shiny::reactive({
+    keys <- if (is.null(active_agents)) names(agent_titles) else active_agents()
+    intersect(keys, names(agent_titles))
+  })
 
   result_watch_paths <- unique(unlist(
     lapply(
@@ -607,33 +611,29 @@ register_results_server <- function(input, output, session) {
   )
 
 
-  agent_titles <- c(
-    go = "GO",
-    kegg = "KEGG",
-    gsva = "GSVA",
-    chea = "ChEA"
-  )
-
   output$analysis_completion_banner <- renderUI({
     result_signature()
-    summary_data <- result_summary_rows()
+    keys <- active_keys()
+    all_summary <- result_summary_rows()
+    summary_data <- all_summary[match(toupper(keys), all_summary$Agent), , drop = FALSE]
+    summary_data <- summary_data[!is.na(summary_data$Agent), , drop = FALSE]
     completed <- sum(summary_data$Status != "Not generated")
     total_rows <- sum(summary_data$Rows)
 
     div(
       class = paste(
         "analysis-completion-banner",
-        if (completed == 4) "analysis-completion-complete" else "analysis-completion-partial"
+        if (completed == length(keys)) "analysis-completion-complete" else "analysis-completion-partial"
       ),
       div(
         class = "analysis-completion-icon",
-        if (completed == 4) "✓" else "↻"
+        if (completed == length(keys)) "✓" else "↻"
       ),
       div(
-        h4(if (completed == 4) "Four-agent analysis outputs are ready" else "Analysis outputs are partially available"),
+        h4(if (completed == length(keys)) "Selected analysis outputs are ready" else "Analysis outputs are partially available"),
         p(
           paste0(
-            completed, " of 4 agents generated output files · ",
+            completed, " of ", length(keys), " selected agents generated output files · ",
             format(total_rows, big.mark = ","), " total result rows"
           )
         )

@@ -91,6 +91,10 @@ source(
   local = TRUE
 )
 
+source(file.path(real_agent_project_root, "R", "agent-reactome.R"), local = TRUE)
+source(file.path(real_agent_project_root, "R", "agent-string.R"), local = TRUE)
+source(file.path(real_agent_project_root, "R", "agent-immune.R"), local = TRUE)
+
 
 # ------------------------------------------------------------
 # Input detection helpers
@@ -153,14 +157,12 @@ normalise_column_name <- function(value) {
     return(character())
   }
 
-  value <- as.character(value)
+  value <- tolower(as.character(value))
 
-  tolower(
-    gsub(
-      "[^a-z0-9]",
-      "",
-      value
-    )
+  gsub(
+    "[^a-z0-9]",
+    "",
+    value
   )
 }
 
@@ -175,6 +177,7 @@ detect_gene_column <- function(data) {
 
   preferred_names <- c(
     "genesymbol",
+    "hugosymbol",
     "symbol",
     "gene",
     "genename",
@@ -297,7 +300,7 @@ detect_expression_matrix <- function(data) {
     return(FALSE)
   }
 
-  if (nrow(data) < 2 || ncol(data) < 3) {
+  if (nrow(data) < 2 || ncol(data) < 10) {
     return(FALSE)
   }
 
@@ -821,6 +824,162 @@ execute_kegg_agent <- function(
   )
 }
 
+execute_reactome_agent <- function(genes, pvalue_cutoff = 0.05) {
+  output_directory <- file.path(real_agent_project_root, "output", "reactome")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+
+  result <- run_reactome_agent(
+    genes = genes,
+    pvalue_cutoff = pvalue_cutoff
+  )
+  csv_file <- file.path(output_directory, "reactome_results.csv")
+  plot_file <- file.path(output_directory, "reactome_pathways.png")
+  readr::write_csv(result$results, csv_file)
+  save_enrichment_dotplot(result$results, plot_file, "Reactome Pathway Enrichment")
+
+  list(
+    success = TRUE, agent = "reactome", result = result,
+    csv = csv_file, plot = plot_file, rows = nrow(result$results),
+    message = result$summary
+  )
+}
+
+execute_wikipathways_agent <- function(genes, pvalue_cutoff = 0.05) {
+  stopifnot(requireNamespace("clusterProfiler", quietly = TRUE))
+  output_directory <- file.path(real_agent_project_root, "output", "wikipathways")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+  result <- clusterProfiler::enrichWP(gene = unique(genes), organism = "Homo sapiens", pvalueCutoff = pvalue_cutoff, qvalueCutoff = 0.2)
+  results <- as.data.frame(result)
+  csv_file <- file.path(output_directory, "wikipathways_results.csv")
+  plot_file <- file.path(output_directory, "wikipathways_pathways.png")
+  readr::write_csv(results, csv_file)
+  save_enrichment_dotplot(results, plot_file, "WikiPathways Enrichment")
+  list(success = TRUE, agent = "wikipathways", result = list(results = results), csv = csv_file, plot = plot_file, rows = nrow(results), message = paste("WikiPathways identified", nrow(results), "enriched pathways."))
+}
+
+execute_hallmark_agent <- function(genes, pvalue_cutoff = 0.05) {
+  stopifnot(requireNamespace("msigdbr", quietly = TRUE), requireNamespace("clusterProfiler", quietly = TRUE))
+  output_directory <- file.path(real_agent_project_root, "output", "hallmark")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+  sets <- msigdbr::msigdbr(species = "Homo sapiens", category = "H")
+  term2gene <- sets[, c("gs_name", "gene_symbol")]
+  result <- clusterProfiler::enricher(gene = unique(genes), TERM2GENE = term2gene, pvalueCutoff = pvalue_cutoff, qvalueCutoff = 0.2)
+  results <- as.data.frame(result)
+  csv_file <- file.path(output_directory, "hallmark_results.csv")
+  plot_file <- file.path(output_directory, "hallmark_pathways.png")
+  readr::write_csv(results, csv_file)
+  save_enrichment_dotplot(results, plot_file, "Cancer Hallmark Enrichment")
+  list(success = TRUE, agent = "hallmark", result = list(results = results), csv = csv_file, plot = plot_file, rows = nrow(results), message = paste("Hallmark analysis identified", nrow(results), "enriched gene sets."))
+}
+
+execute_string_agent <- function(genes) {
+  output_directory <- file.path(real_agent_project_root, "output", "string")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+
+  result <- run_string_agent(genes = genes)
+  csv_file <- file.path(output_directory, "string_hub_proteins.csv")
+  interaction_file <- file.path(output_directory, "string_interactions.csv")
+  readr::write_csv(result$top_hubs, csv_file)
+  readr::write_csv(result$interactions, interaction_file)
+
+  list(
+    success = TRUE, agent = "string", result = result,
+    csv = csv_file, plot = NA_character_, rows = nrow(result$top_hubs),
+    message = result$summary
+  )
+}
+
+execute_immune_agent <- function(data) {
+  output_directory <- file.path(real_agent_project_root, "output", "immune")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+
+  expression_matrix <- prepare_expression_matrix(data)
+  result <- run_immune_agent(expression_matrix = expression_matrix)
+  result_table <- result$results
+  csv_file <- file.path(output_directory, "immune_cell_composition.csv")
+  readr::write_csv(result_table, csv_file)
+
+  list(
+    success = TRUE, agent = "immune", result = result,
+    csv = csv_file, plot = NA_character_, rows = nrow(result_table),
+    message = result$summary
+  )
+}
+
+execute_drug_agent <- function(data) {
+  original_names <- names(data)
+  normalized <- normalise_column_name(original_names)
+  if (any(grepl("BRD:", original_names, fixed = TRUE))) {
+    numeric_columns <- vapply(data, function(x) mean(!is.na(suppressWarnings(as.numeric(as.character(x))))) >= 0.8, logical(1))
+    numeric_columns[[1]] <- FALSE
+    values <- data[, numeric_columns, drop = FALSE]
+    if (!ncol(values)) stop("No numeric PRISM compound measurements were found.", call. = FALSE)
+    ranking <- data.frame(Compound = names(values), Mean_Response = vapply(values, function(x) mean(as.numeric(x), na.rm = TRUE), numeric(1)), Measurements = vapply(values, function(x) sum(is.finite(as.numeric(x))), integer(1)), stringsAsFactors = FALSE)
+    ranking <- ranking[order(ranking$Mean_Response, na.last = TRUE), , drop = FALSE]
+    ranking$Rank <- seq_len(nrow(ranking))
+    ranking <- ranking[, c("Rank", "Compound", "Mean_Response", "Measurements")]
+    output_directory <- file.path(real_agent_project_root, "output", "drug")
+    dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+    csv_file <- file.path(output_directory, "drug_sensitivity_results.csv")
+    readr::write_csv(ranking, csv_file)
+    return(list(success = TRUE, agent = "drug", result = list(results = ranking), csv = csv_file, plot = NA_character_, rows = nrow(ranking), message = paste("Drug Sensitivity ranked", nrow(ranking), "PRISM compounds.")))
+  }
+  compound_candidates <- c("compound", "compoundname", "drug", "drugname", "treatment")
+  response_candidates <- c("ic50", "auc", "viability", "sensitivity", "response", "lnic50")
+  compound_index <- match(compound_candidates, normalized, nomatch = 0L)
+  response_index <- match(response_candidates, normalized, nomatch = 0L)
+  compound_index <- compound_index[compound_index > 0L]
+  response_index <- response_index[response_index > 0L]
+
+  if (length(compound_index) == 0L || length(response_index) == 0L) {
+    stop(
+      paste(
+        "Drug sensitivity requires a compound/drug column and a numeric",
+        "response column such as IC50, AUC, viability, sensitivity, or response."
+      ),
+      call. = FALSE
+    )
+  }
+
+  compound_column <- original_names[compound_index[[1]]]
+  response_column <- original_names[response_index[[1]]]
+  response_values <- suppressWarnings(as.numeric(data[[response_column]]))
+  valid <- !is.na(data[[compound_column]]) & nzchar(trimws(as.character(data[[compound_column]]))) & is.finite(response_values)
+  response_data <- data.frame(
+    Compound = trimws(as.character(data[[compound_column]][valid])),
+    Response = response_values[valid],
+    stringsAsFactors = FALSE
+  )
+  if (nrow(response_data) == 0L) stop("No valid drug-response measurements were found.", call. = FALSE)
+
+  summary_table <- stats::aggregate(Response ~ Compound, response_data, function(x) c(mean = mean(x), n = length(x)))
+  ranking <- data.frame(
+    Compound = summary_table$Compound,
+    Mean_Response = summary_table$Response[, "mean"],
+    Measurements = as.integer(summary_table$Response[, "n"]),
+    stringsAsFactors = FALSE
+  )
+  lower_is_sensitive <- grepl("ic50|auc|viability", normalise_column_name(response_column))
+  ranking <- ranking[order(ranking$Mean_Response, decreasing = !lower_is_sensitive), , drop = FALSE]
+  ranking$Rank <- seq_len(nrow(ranking))
+  ranking <- ranking[, c("Rank", "Compound", "Mean_Response", "Measurements")]
+
+  output_directory <- file.path(real_agent_project_root, "output", "drug")
+  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+  csv_file <- file.path(output_directory, "drug_sensitivity_results.csv")
+  readr::write_csv(ranking, csv_file)
+
+  list(
+    success = TRUE, agent = "drug",
+    result = list(
+      agent_name = "Drug Sensitivity", results = ranking,
+      response_column = response_column, lower_is_sensitive = lower_is_sensitive
+    ),
+    csv = csv_file, plot = NA_character_, rows = nrow(ranking),
+    message = paste("Drug Sensitivity ranked", nrow(ranking), "compounds using", response_column, "measurements.")
+  )
+}
+
 
 execute_chea_agent <- function(
   genes
@@ -1022,6 +1181,9 @@ run_selected_real_agent <- function(
         )
       }
 
+      if (agent == "immune") return(execute_immune_agent(data))
+      if (agent == "drug") return(execute_drug_agent(data))
+
       gene_input <- extract_gene_list(
         data
       )
@@ -1048,6 +1210,19 @@ run_selected_real_agent <- function(
           genes = gene_input$genes,
           pvalue_cutoff = pvalue_cutoff
         ),
+
+        reactome = execute_reactome_agent(
+          genes = gene_input$genes,
+          pvalue_cutoff = pvalue_cutoff
+        ),
+
+        wikipathways = execute_wikipathways_agent(genes = gene_input$genes, pvalue_cutoff = pvalue_cutoff),
+
+        string = execute_string_agent(
+          genes = gene_input$genes
+        ),
+
+        hallmark = execute_hallmark_agent(genes = gene_input$genes, pvalue_cutoff = pvalue_cutoff),
 
         chea = execute_chea_agent(
           genes = gene_input$genes

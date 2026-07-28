@@ -1,1480 +1,472 @@
-options(
-  shiny.maxRequestSize = 1024 * 1024^2,
-  repos = c(CRAN = "https://cloud.r-project.org")
+options(shiny.maxRequestSize = 1024 * 1024^2)
+
+suppressPackageStartupMessages({
+  library(shiny)
+  library(readr)
+  library(DT)
+})
+
+source("real_pipeline.R", local = TRUE)
+source("run_real_agents.R", local = TRUE)
+source("results_helpers.R", local = TRUE)
+
+# Semantic HTML helpers are not exported as top-level Shiny functions.
+header <- tags$header
+main <- tags$main
+section <- tags$section
+footer <- tags$footer
+
+module_meta <- list(
+  go = list(title = "GO", subtitle = "Biological process enrichment", input = "Gene list"),
+  kegg = list(title = "KEGG", subtitle = "Molecular pathway enrichment", input = "Gene list"),
+  reactome = list(title = "Reactome", subtitle = "Curated pathway enrichment", input = "Gene list"),
+  wikipathways = list(title = "WikiPathways", subtitle = "Community pathway enrichment", input = "Gene list"),
+  string = list(title = "STRING", subtitle = "Protein interaction hubs", input = "Gene list"),
+  hallmark = list(title = "Hallmark", subtitle = "Cancer hallmark enrichment", input = "Gene list"),
+  chea = list(title = "ChEA", subtitle = "Transcription factor enrichment", input = "Gene list"),
+  gsva = list(title = "GSVA", subtitle = "Sample-level pathway activity", input = "Expression matrix"),
+  immune = list(title = "Immune Deconvolution", subtitle = "Immune cell composition", input = "Expression matrix"),
+  drug = list(title = "Drug Sensitivity", subtitle = "Ranked compound responses", input = "Drug-response table")
 )
 
-required_packages <- c(
-  "base64enc",
-  "shiny",
-  "readr",
-  "dplyr",
-  "DT"
-)
-
-missing_packages <- required_packages[
-  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
-]
-
-if (length(missing_packages) > 0) {
-  install.packages(missing_packages)
+read_dataset <- function(path, name) {
+  extension <- tolower(tools::file_ext(name))
+  switch(
+    extension,
+    csv = readr::read_csv(path, show_col_types = FALSE, name_repair = "unique"),
+    tsv = readr::read_tsv(path, show_col_types = FALSE, name_repair = "unique"),
+    txt = readr::read_tsv(path, show_col_types = FALSE, name_repair = "unique"),
+    stop("Upload a CSV, TSV, or TXT file.", call. = FALSE)
+  )
 }
 
-library(shiny)
-library(readr)
-library(dplyr)
-library(DT)
-source("results_helpers.R", local = TRUE)
-source("real_pipeline.R", local = TRUE)
-source("agent_inputs.R", local = TRUE)
+dataset_profile <- function(data) {
+  empty <- list(gene = FALSE, expression = FALSE, drug = FALSE, genes = character(), gene_column = NULL)
+  if (is.null(data) || nrow(data) == 0L || ncol(data) == 0L) return(empty)
 
-read_uploaded_dataset <- function(file_path, file_name) {
-  extension <- tolower(tools::file_ext(file_name))
+  normalized <- normalise_column_name(names(data))
+  gene_candidates <- c("genesymbol", "hugosymbol", "gene", "genes", "symbol", "genename", "hgncsymbol")
+  gene_positions <- match(gene_candidates, normalized, nomatch = 0L)
+  gene_positions <- gene_positions[gene_positions > 0L]
+  gene_column <- if (length(gene_positions)) names(data)[gene_positions[[1]]] else NULL
+  genes <- if (!is.null(gene_column)) clean_gene_symbols(data[[gene_column]]) else character()
 
-  if (extension == "csv") {
-    return(
-      readr::read_csv(
-        file_path,
-        show_col_types = FALSE,
-        progress = FALSE,
-        name_repair = "unique"
-      )
+  numeric_count <- sum(vapply(data, function(x) {
+    values <- suppressWarnings(as.numeric(as.character(x)))
+    mean(!is.na(values)) >= 0.8
+  }, logical(1)))
+  # DEG summaries such as gene_expression_CMS4.csv have a few numeric
+  # statistics but are not sample-by-gene matrices. Require a wider matrix
+  # before offering GSVA or immune deconvolution.
+  expression <- ncol(data) >= 10L && length(genes) >= 10L && numeric_count >= 2L
+
+  compound <- any(normalized %in% c("compound", "compoundname", "drug", "drugname", "treatment"))
+  response <- any(normalized %in% c("ic50", "auc", "viability", "sensitivity", "response", "lnic50"))
+  wide_prism <- any(grepl("BRD:", names(data), fixed = TRUE))
+
+  list(
+    gene = length(genes) >= 2L,
+    expression = expression,
+    drug = (compound && response) || wide_prism,
+    genes = genes,
+    gene_column = gene_column
+  )
+}
+
+module_card <- function(key, meta) {
+  div(
+    id = paste0("module-card-", key),
+    class = "module-card",
+    checkboxInput(paste0("module_", key), label = NULL, value = FALSE),
+    div(
+      class = "module-copy",
+      div(class = "module-title-row", strong(meta$title), span(id = paste0("compat-", key), class = "compat-badge", "Awaiting data")),
+      span(class = "module-subtitle", meta$subtitle),
+      span(class = "module-input", meta$input)
     )
-  }
+  )
+}
 
-  if (extension %in% c("tsv", "txt")) {
-    return(
-      readr::read_tsv(
-        file_path,
-        show_col_types = FALSE,
-        progress = FALSE,
-        name_repair = "unique"
-      )
-    )
-  }
-
-  stop("Unsupported file type. Upload CSV, TSV, or TXT.")
+progress_row <- function(key, meta) {
+  div(
+    id = paste0("progress-", key), class = "progress-row progress-idle",
+    span(class = "progress-indicator", "·"),
+    div(strong(meta$title), span(class = "progress-message", "Waiting"))
+  )
 }
 
 ui <- fluidPage(
   tags$head(
-    tags$title("OncoProfiling Tools"),
-    tags$link(
-      rel = "stylesheet",
-      type = "text/css",
-      href = "styles.css?v=agent-input-controls-v1"
-    ),
-    tags$script(src = "status.js")
+    tags$title("OncoProfilingTools"),
+    tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+    tags$link(rel = "stylesheet", href = "styles.css?v=research-dashboard-1"),
+    tags$script(src = "status.js?v=research-dashboard-1")
   ),
-
   div(
-    class = "app-page",
-
-    div(
-      class = "top-header",
-
-      div(
-        class = "brand-area",
-        div(class = "brand-logo", "OP"),
-        div(
-          h1("OncoProfiling Tools"),
-          p("Multi-agent genomic interpretation workspace")
-        )
-      ),
-
-      div(
-        class = "header-badge",
-        span(class = "header-dot"),
-        "System Ready"
-      )
+    class = "app-shell",
+    header(
+      class = "site-header",
+      div(class = "brand-mark", "OP"),
+      div(class = "brand-copy", h1("OncoProfilingTools"), p("Agentic AI Platform for Cancer Pharmacogenomics")),
+      div(class = "system-status", span(), "Research workspace")
     ),
 
-    div(
-      class = "live-metrics-grid",
-
-      div(
-        class = "live-metric-card",
-        div(class = "live-metric-icon metric-dataset-icon", "✓"),
+    main(
+      class = "dashboard",
+      section(
+        class = "hero-panel",
         div(
-          class = "live-metric-content",
-          span(class = "live-metric-label", "Dataset"),
-          uiOutput("metric_dataset_status")
-        )
+          class = "hero-copy",
+          span(class = "eyebrow", "BIOMARKER DISCOVERY WORKSPACE"),
+          h2("From genomic profiles to interpretable evidence"),
+          p("Run validated enrichment, network, immune, and pharmacogenomic analyses through one reproducible workflow.")
+        ),
+        div(class = "hero-facts", div(strong(as.character(length(module_meta))), span("Analysis modules")), div(strong("Real"), span("Scientific backends")))
       ),
 
       div(
-        class = "live-metric-card",
-        div(class = "live-metric-icon metric-gene-icon", "DNA"),
-        div(
-          class = "live-metric-content",
-          span(class = "live-metric-label", "Genes / Features"),
-          uiOutput("metric_gene_count")
+        class = "workflow-grid",
+        section(
+          class = "panel input-panel",
+          div(class = "section-heading", span(class = "step", "01"), div(h2("Upload dataset"), p("Gene list, expression matrix, or drug-response table"))),
+          div(
+            class = "upload-zone",
+            div(class = "upload-icon", "CSV"),
+            div(h3("Choose analysis file"), p("CSV, TSV, or TXT · up to 1 GB")),
+            fileInput("dataset", label = NULL, accept = c(".csv", ".tsv", ".txt"), buttonLabel = "Choose file", placeholder = "No file selected")
+          ),
+          uiOutput("dataset_status"),
+          uiOutput("dataset_metrics")
+        ),
+
+        section(
+          class = "panel module-panel",
+          div(class = "section-heading", span(class = "step", "02"), div(h2("Analysis modules"), p("Only scientifically compatible modules will execute"))),
+          div(class = "module-grid", Map(module_card, names(module_meta), module_meta)),
+          actionButton("run_analysis", "Run analysis", class = "primary-button", icon = icon("play")),
+          p(class = "run-note", "Modules requiring a different input type are retained in the summary as not executed.")
         )
       ),
 
-      div(
-        class = "live-metric-card",
-        div(class = "live-metric-icon metric-sample-icon", "S"),
-        div(
-          class = "live-metric-content",
-          span(class = "live-metric-label", "Samples"),
-          uiOutput("metric_sample_count")
-        )
+      section(
+        id = "progress-section", class = "panel progress-panel",
+        div(class = "section-heading", span(class = "step", "03"), div(h2("Analysis progress"), p("Independent background workers report live status"))),
+        div(class = "progress-layout", div(class = "progress-list", Map(progress_row, names(module_meta), module_meta)), uiOutput("run_overview"))
       ),
 
-      div(
-        class = "live-metric-card",
-        div(class = "live-metric-icon metric-agent-icon", "AI"),
-        div(
-          class = "live-metric-content",
-          span(class = "live-metric-label", "Agents"),
-          uiOutput("metric_agent_count")
-        )
-      ),
-
-      div(
-        class = "live-metric-card",
-        div(class = "live-metric-icon metric-runtime-icon", "T"),
-        div(
-          class = "live-metric-content",
-          span(class = "live-metric-label", "Runtime"),
-          uiOutput("metric_runtime")
-        )
-      )
+      uiOutput("results_center"),
+      uiOutput("final_summary")
     ),
-
-    div(
-      class = "main-grid",
-
-      div(
-        class = "upload-card glass-card",
-
-        div(
-          class = "section-label",
-          "STEP 1"
-        ),
-
-        h2("Upload genomic dataset"),
-
-        p(
-          class = "section-description",
-          paste(
-            "Upload a CSV, TSV, or TXT dataset.",
-            "The application will validate and preview it before analysis."
-          )
-        ),
-
-        div(
-          class = "upload-box",
-
-          div(
-            class = "upload-copy",
-            div(class = "upload-icon", "⇧"),
-            h3("Choose your dataset"),
-            p("Supported formats: CSV, TSV, TXT")
-          ),
-
-          fileInput(
-            inputId = "dataset",
-            label = NULL,
-            accept = c(".csv", ".tsv", ".txt")
-          )
-        ),
-
-        uiOutput("uploaded_file_details"),
-
-        actionButton(
-          inputId = "validate_dataset",
-          label = "Validate Dataset",
-          class = "run-button"
-        )
-      ),
-
-      div(
-        class = "status-card glass-card",
-
-        div(
-          class = "section-label",
-          "DATASET STATUS"
-        ),
-
-        h2("Validation summary"),
-
-        uiOutput("validation_summary"),
-
-        div(
-          class = "status-log",
-          verbatimTextOutput("status")
-        )
-      )
-    ),
-
-    agent_input_control_ui(),
-
-    div(
-      class = "agents-workspace glass-card",
-
-      div(
-        class = "agents-heading",
-
-        div(
-          div(class = "section-label", "STEP 2"),
-          h2("Four intelligent analysis agents"),
-          p(
-            class = "section-description",
-            paste(
-              "Each agent runs a specialized genomic analysis.",
-              "Live status, results, and interpretation are shown below."
-            )
-          )
-        ),
-
-        div(
-          class = "pipeline-status",
-          span(class = "pipeline-status-dot"),
-          span(id = "pipeline-status-text", "Waiting for dataset")
-        )
-      ),
-
-      div(
-        class = "agents-grid",
-
-        div(
-          id = "go-agent-card",
-          class = "agent-card agent-waiting",
-
-          div(
-            class = "agent-card-top",
-            div(class = "agent-icon agent-icon-go", "GO"),
-            span(
-              id = "go-agent-badge",
-              class = "agent-status-badge",
-              "Waiting"
-            )
-          ),
-
-          h3("GO Agent"),
-          p("Identifies enriched Gene Ontology biological processes."),
-
-          div(
-            class = "agent-progress-track",
-            div(
-              id = "go-agent-progress",
-              class = "agent-progress-fill"
-            )
-          ),
-
-          div(
-            id = "go-agent-message",
-            class = "agent-message",
-            "Waiting for analysis to begin."
-          )
-        ),
-
-        div(
-          id = "kegg-agent-card",
-          class = "agent-card agent-waiting",
-
-          div(
-            class = "agent-card-top",
-            div(class = "agent-icon agent-icon-kegg", "KG"),
-            span(
-              id = "kegg-agent-badge",
-              class = "agent-status-badge",
-              "Waiting"
-            )
-          ),
-
-          h3("KEGG Agent"),
-          p("Detects significantly enriched molecular pathways."),
-
-          div(
-            class = "agent-progress-track",
-            div(
-              id = "kegg-agent-progress",
-              class = "agent-progress-fill"
-            )
-          ),
-
-          div(
-            id = "kegg-agent-message",
-            class = "agent-message",
-            "Waiting for analysis to begin."
-          )
-        ),
-
-        div(
-          id = "gsva-agent-card",
-          class = "agent-card agent-waiting",
-
-          div(
-            class = "agent-card-top",
-            div(class = "agent-icon agent-icon-gsva", "GS"),
-            span(
-              id = "gsva-agent-badge",
-              class = "agent-status-badge",
-              "Waiting"
-            )
-          ),
-
-          h3("GSVA Agent"),
-          p("Calculates sample-level Hallmark pathway activity scores."),
-
-          div(
-            class = "agent-progress-track",
-            div(
-              id = "gsva-agent-progress",
-              class = "agent-progress-fill"
-            )
-          ),
-
-          div(
-            id = "gsva-agent-message",
-            class = "agent-message",
-            "Waiting for analysis to begin."
-          )
-        ),
-
-        div(
-          id = "chea-agent-card",
-          class = "agent-card agent-waiting",
-
-          div(
-            class = "agent-card-top",
-            div(class = "agent-icon agent-icon-chea", "TF"),
-            span(
-              id = "chea-agent-badge",
-              class = "agent-status-badge",
-              "Waiting"
-            )
-          ),
-
-          h3("ChEA Agent"),
-          p("Discovers candidate transcription-factor regulators."),
-
-          div(
-            class = "agent-progress-track",
-            div(
-              id = "chea-agent-progress",
-              class = "agent-progress-fill"
-            )
-          ),
-
-          div(
-            id = "chea-agent-message",
-            class = "agent-message",
-            "Waiting for analysis to begin."
-          )
-        )
-      ),
-
-      actionButton(
-        inputId = "run_analysis",
-        label = "Run Four-Agent Analysis",
-        class = "run-button run-all-agents-button"
-      ),
-
-      div(
-        class = "analysis-log-panel",
-        div(
-          class = "analysis-log-heading",
-          span("LIVE PIPELINE LOG"),
-          span(class = "live-log-indicator")
-        ),
-        verbatimTextOutput("analysis_log")
-      )
-    ),
-
-    results_center_ui(),
-
-    div(
-      class = "preview-card glass-card",
-
-      div(
-        class = "preview-heading",
-
-        div(
-          div(class = "section-label", "DATA PREVIEW"),
-          h2("Uploaded dataset")
-        ),
-
-        uiOutput("dataset_dimensions")
-      ),
-
-      DTOutput("dataset_preview")
-    )
+    footer(class = "site-footer", span("OncoProfilingTools · Research use only"), span("Biological findings require expert validation"))
   )
 )
 
 server <- function(input, output, session) {
+  data_value <- reactiveVal(NULL)
+  data_error <- reactiveVal(NULL)
+  workers_value <- reactiveVal(list())
+  results_value <- reactiveVal(list())
+  selected_value <- reactiveVal(character())
+  run_started <- reactiveVal(NULL)
+  run_finished <- reactiveVal(NULL)
+  running <- reactiveVal(FALSE)
 
-  clear_live_analysis_outputs <- function() {
-    live_files <- c(
-      file.path(project_root, "output", "cms4", "go_results.csv"),
-      file.path(project_root, "output", "visualizations", "go_biological_process_dotplot.png"),
-      file.path(project_root, "output", "cms4", "kegg_results.csv"),
-      file.path(project_root, "output", "visualizations", "kegg_pathway_dotplot.png"),
-      file.path(project_root, "output", "gsva_bowel", "gsva_hallmark_scores.csv"),
-      file.path(project_root, "output", "gsva_bowel", "gsva_hallmark_heatmap.png"),
-      file.path(project_root, "output", "chea_cms4", "chea_results.csv"),
-      file.path(project_root, "output", "chea_cms4", "chea_tf_dotplot.png")
-    )
+  stop_active_workers <- function() {
+    workers <- workers_value()
+    if (!length(workers)) return(invisible(NULL))
 
-    existing_files <- live_files[file.exists(live_files)]
-
-    if (length(existing_files) > 0) {
-      unlink(existing_files, force = TRUE)
+    for (worker in workers) {
+      process <- worker$process
+      if (is.null(process)) next
+      try({
+        if (isTRUE(process$is_alive())) process$kill()
+      }, silent = TRUE)
     }
+
+    invisible(NULL)
   }
 
-  clear_live_analysis_outputs()
+  clear_previous_artifacts <- function() {
+    # Remove every result file known to the Results Center. This prevents
+    # plots, tables and downloadable reports from a previous dataset/run
+    # from appearing in the current analysis.
+    paths <- unique(unlist(lapply(result_files, function(x) unname(unlist(x))), use.names = FALSE))
+    paths <- paths[!is.na(paths) & nzchar(paths)]
+    existing <- paths[file.exists(paths)]
+    if (length(existing)) unlink(existing, recursive = TRUE, force = TRUE)
+
+    # Remove background-worker inputs/results/logs from earlier runs.
+    if (dir.exists(real_pipeline_runtime_dir)) {
+      stale <- list.files(real_pipeline_runtime_dir, full.names = TRUE, all.files = TRUE, no.. = TRUE)
+      if (length(stale)) unlink(stale, recursive = TRUE, force = TRUE)
+    }
+
+    invisible(NULL)
+  }
+
+  reset_analysis_state <- function(clear_files = TRUE) {
+    stop_active_workers()
+    running(FALSE)
+    workers_value(list())
+    results_value(list())
+    selected_value(character())
+    run_started(NULL)
+    run_finished(NULL)
+    if (isTRUE(clear_files)) clear_previous_artifacts()
+    session$sendCustomMessage("reset-analysis-ui", list())
+    invisible(NULL)
+  }
+
+  # Never expose output files left behind by an earlier app session.
+  clear_previous_artifacts()
+
+  session$onSessionEnded(function() {
+    stop_active_workers()
+  })
+
+  output$results_center <- renderUI({
+    if (is.null(run_started())) return(NULL)
+    results_center_ui(selected_value())
+  })
+
+  register_results_server(input, output, session, selected_value)
+
+  profile <- reactive(dataset_profile(data_value()))
+
+  compatibility <- reactive({
+    p <- profile()
+    c(
+      go = p$gene, kegg = p$gene, reactome = p$gene, wikipathways = p$gene, string = p$gene, hallmark = p$gene, chea = p$gene,
+      gsva = p$expression, immune = p$expression, drug = p$drug
+    )
+  })
 
   observeEvent(input$dataset, {
-    clear_live_analysis_outputs()
+    reset_analysis_state(clear_files = TRUE)
+    data_error(NULL)
+    data_value(NULL)
+    tryCatch({
+      loaded <- read_dataset(input$dataset$datapath, input$dataset$name)
+      if (!nrow(loaded) || !ncol(loaded)) stop("The uploaded file is empty.")
+      data_value(loaded)
+    }, error = function(error) data_error(conditionMessage(error)))
   }, ignoreInit = TRUE)
 
-  register_results_server(input, output, session)
-
-
-  dataset_data <- reactiveVal(NULL)
-  dataset_error <- reactiveVal(NULL)
-
-  dataset_profile <- reactive({
-    detect_agent_compatibility(dataset_data())
-  })
-  worker_result_succeeded <- function(worker) {
-    if (!is.list(worker)) {
-      return(FALSE)
-    }
-
-    result <- worker[["result"]]
-
-    if (!is.list(result)) {
-      return(FALSE)
-    }
-
-    isTRUE(result[["success"]])
-  }
-
-  completed_agents <- reactiveVal(0L)
-  analysis_start_time <- reactiveVal(NULL)
-  analysis_runtime_seconds <- reactiveVal(0L)
-
-  analysis_log_value <- reactiveVal(
-    "[WAITING] Validate a dataset to enable the analysis agents."
-  )
-  real_workers <- reactiveVal(list())
-  real_pipeline_running <- reactiveVal(FALSE)
-  real_pipeline_finished <- reactiveVal(FALSE)
-
-
-  send_agent_status <- function(agent, status, message) {
-    session$sendCustomMessage(
-      type = "agent-status",
-      message = list(
-        agent = agent,
-        status = status,
-        message = message
-      )
-    )
-  }
-
-  append_analysis_log <- function(message) {
-    current_log <- analysis_log_value()
-
-    timestamp <- format(
-      Sys.time(),
-      "%H:%M:%S"
-    )
-
-    analysis_log_value(
-      paste0(
-        current_log,
-        "\n[",
-        timestamp,
-        "] ",
-        message
-      )
-    )
-  }
-
-  output$analysis_log <- renderText({
-    analysis_log_value()
-  })
-
-  output$metric_dataset_status <- renderUI({
-    if (is.null(dataset_data())) {
-      return(
-        div(
-          class = "live-metric-value metric-value-waiting",
-          "Waiting"
-        )
-      )
-    }
-
-    div(
-      class = "live-metric-value metric-value-ready",
-      "Validated"
-    )
-  })
-
-  output$metric_gene_count <- renderUI({
-    data <- dataset_data()
-
-    value <- if (is.null(data)) {
-      "—"
-    } else {
-      format(ncol(data), big.mark = ",")
-    }
-
-    div(class = "live-metric-value", value)
-  })
-
-  output$metric_sample_count <- renderUI({
-    data <- dataset_data()
-
-    value <- if (is.null(data)) {
-      "—"
-    } else {
-      format(nrow(data), big.mark = ",")
-    }
-
-    div(class = "live-metric-value", value)
-  })
-
-  output$metric_agent_count <- renderUI({
-    div(
-      class = "live-metric-value",
-      paste0(completed_agents(), " / 4")
-    )
-  })
-
-  output$metric_runtime <- renderUI({
-    seconds <- analysis_runtime_seconds()
-
-    minutes <- seconds %/% 60
-    remaining_seconds <- seconds %% 60
-
-    div(
-      class = "live-metric-value",
-      sprintf("%02d:%02d", minutes, remaining_seconds)
-    )
-  })
-
-  output$detected_dataset_summary <- renderUI({
-    profile <- dataset_profile()
-
-    div(
-      class = "detected-dataset-summary",
-
-      div(
-        class = "detected-summary-item",
-        span("Detected type"),
-        strong(profile$dataset_type)
-      ),
-
-      div(
-        class = "detected-summary-item",
-        span("Gene identifier"),
-        strong(
-          if (is.null(profile$gene_column)) {
-            "Not detected"
-          } else {
-            profile$gene_column
-          }
-        )
-      ),
-
-      div(
-        class = "detected-summary-item",
-        span("Numeric samples"),
-        strong(profile$sample_count)
-      )
-    )
-  })
-
-  output$selected_agent_summary <- renderUI({
-    selected <- c(
-      go = isTRUE(input$enable_go),
-      kegg = isTRUE(input$enable_kegg),
-      gsva = isTRUE(input$enable_gsva),
-      chea = isTRUE(input$enable_chea)
-    )
-
-    compatible <- dataset_profile()$agent_compatibility
-
-    valid_selected <- selected & compatible
-
-    div(
-      class = "selected-agent-summary",
-      span(class = "selected-agent-dot"),
-      strong(sum(valid_selected)),
-      span("compatible agents selected")
-    )
-  })
-
-  for (agent_key in names(agent_requirements)) {
-    local({
-      key <- agent_key
-
-      output[[paste0(key, "_compatibility")]] <- renderUI({
-        profile <- dataset_profile()
-        compatible <- isTRUE(
-          profile$agent_compatibility[[key]]
-        )
-
-        div(
-          class = paste(
-            "agent-compatibility",
-            if (compatible) {
-              "agent-compatible"
-            } else {
-              "agent-incompatible"
-            }
-          ),
-
-          span(
-            class = "agent-compatibility-dot"
-          ),
-
-          div(
-            strong(
-              if (compatible) {
-                "Compatible"
-              } else {
-                "Not compatible"
-              }
-            ),
-            span(profile$messages[[key]])
-          )
-        )
-      })
-    })
-  }
-
   observe({
-    profile <- dataset_profile()
-
-    for (agent_key in names(agent_requirements)) {
-      compatible <- isTRUE(
-        profile$agent_compatibility[[agent_key]]
-      )
-
-      shinyjs_state <- compatible &&
-        !is.null(dataset_data())
-
-      session$sendCustomMessage(
-        "agent-input-state",
-        list(
-          agent = agent_key,
-          enabled = shinyjs_state
-        )
-      )
+    compatible <- compatibility()
+    for (key in names(module_meta)) {
+      session$sendCustomMessage("module-compatibility", list(
+        key = key,
+        compatible = isTRUE(compatible[[key]]),
+        ready = !is.null(data_value())
+      ))
     }
   })
 
-  output$uploaded_file_details <- renderUI({
-    if (is.null(input$dataset)) {
-      return(
-        div(
-          class = "file-placeholder",
-          "No file selected yet."
-        )
-      )
-    }
+  output$dataset_status <- renderUI({
+    if (!is.null(data_error())) return(div(class = "dataset-alert dataset-error", data_error()))
+    if (is.null(input$dataset)) return(div(class = "dataset-alert", "Select a file to validate its analysis compatibility."))
+    if (is.null(data_value())) return(div(class = "dataset-alert", "Reading dataset…"))
+    div(class = "dataset-alert dataset-ready", span("✓"), strong(input$dataset$name), " validated")
+  })
 
+  output$dataset_metrics <- renderUI({
+    data <- data_value()
+    if (is.null(data)) return(NULL)
+    p <- profile()
     div(
-      class = "file-details",
-
-      div(
-        class = "file-type-icon",
-        toupper(tools::file_ext(input$dataset$name))
-      ),
-
-      div(
-        class = "file-copy",
-        strong(input$dataset$name),
-        span(
-          paste(
-            round(input$dataset$size / 1024, 2),
-            "KB"
-          )
-        )
-      )
+      class = "dataset-metrics",
+      div(span("Rows"), strong(format(nrow(data), big.mark = ","))),
+      div(span("Columns"), strong(format(ncol(data), big.mark = ","))),
+      div(span("Genes"), strong(format(length(p$genes), big.mark = ","))),
+      div(span("Compatible"), strong(sum(compatibility())))
     )
   })
 
-  observeEvent(input$validate_dataset, {
-
-    dataset_error(NULL)
-    dataset_data(NULL)
-
-    if (is.null(input$dataset)) {
-      dataset_error("Upload a dataset before validation.")
-
-      showNotification(
-        "Please upload a dataset first.",
-        type = "warning"
-      )
-
-      return()
-    }
-
-    tryCatch(
-      {
-        loaded_data <- read_uploaded_dataset(
-          input$dataset$datapath,
-          input$dataset$name
-        )
-
-        loaded_data <- normalize_uploaded_genomic_data(
-          loaded_data
-        )
-
-        if (nrow(loaded_data) == 0) {
-          stop("The uploaded dataset has no data rows.")
-        }
-
-        if (ncol(loaded_data) == 0) {
-          stop("The uploaded dataset has no columns.")
-        }
-
-        dataset_data(loaded_data)
-
-        showNotification(
-          "Dataset validated successfully.",
-          type = "message"
-        )
-      },
-      error = function(error) {
-        dataset_error(conditionMessage(error))
-
-        showNotification(
-          conditionMessage(error),
-          type = "error",
-          duration = 8
-        )
-      }
-    )
-  })
+  send_progress <- function(key, status, message) {
+    session$sendCustomMessage("analysis-progress", list(key = key, status = status, message = message))
+  }
 
   observeEvent(input$run_analysis, {
-
-    data <- dataset_data()
-
+    data <- data_value()
     if (is.null(data)) {
-      showNotification(
-        "Validate your dataset before running the agents.",
-        type = "warning",
-        duration = 6
-      )
+      showNotification("Upload a valid dataset first.", type = "warning")
+      return()
+    }
+    if (running()) return()
 
+    requested <- vapply(names(module_meta), function(key) isTRUE(input[[paste0("module_", key)]]), logical(1))
+    selected <- names(requested)[requested & compatibility()]
+    if (!length(selected)) {
+      showNotification("Select at least one compatible module.", type = "warning")
       return()
     }
 
-    if (isTRUE(real_pipeline_running())) {
-      showNotification(
-        "An analysis is already running.",
-        type = "warning",
-        duration = 5
-      )
+    # A new run always starts from an empty state and empty output folders.
+    # This guarantees that downloadable reports contain only this run.
+    reset_analysis_state(clear_files = TRUE)
+    selected_value(selected)
+    run_started(Sys.time())
+    running(TRUE)
 
-      return()
+    for (key in names(module_meta)) {
+      if (key %in% selected) send_progress(key, "queued", "Queued") else send_progress(key, "skipped", "Not executed")
     }
 
-    profile <- dataset_profile()
-
-    requested_agents <- c(
-      go = isTRUE(input$enable_go),
-      kegg = isTRUE(input$enable_kegg),
-      gsva = isTRUE(input$enable_gsva),
-      chea = isTRUE(input$enable_chea)
-    )
-
-    compatible_agents <- vapply(
-      names(requested_agents),
-      function(agent) {
-        isTRUE(
-          profile$agent_compatibility[[agent]]
-        )
-      },
-      logical(1)
-    )
-
-    selected_agents <- names(
-      requested_agents[
-        requested_agents &
-          compatible_agents
-      ]
-    )
-
-    if (length(selected_agents) == 0) {
-      showNotification(
-        paste(
-          "Select at least one compatible analysis agent",
-          "before starting the pipeline."
-        ),
-        type = "warning",
-        duration = 7
-      )
-
-      return()
-    }
-
-    completed_agents(0L)
-    analysis_start_time(Sys.time())
-    analysis_runtime_seconds(0L)
-
-    real_pipeline_running(TRUE)
-    real_pipeline_finished(FALSE)
-
-    analysis_log_value(
-      paste0(
-        "[START] Real multi-agent analysis initialized.\n",
-        "[DATASET] ",
-        input$dataset$name,
-        "\n[DIMENSIONS] ",
-        format(nrow(data), big.mark = ","),
-        " rows × ",
-        format(ncol(data), big.mark = ","),
-        " columns\n[AGENTS] ",
-        paste(
-          toupper(selected_agents),
-          collapse = ", "
-        )
-      )
-    )
-
-    session$sendCustomMessage(
-      type = "agent-status",
-      message = list(
-        pipeline = "running",
-        pipeline_message = paste(
-          length(selected_agents),
-          "real analysis agents running"
-        )
-      )
-    )
-
-    all_agents <- c(
-      "go",
-      "kegg",
-      "gsva",
-      "chea"
-    )
-
-    for (agent in all_agents) {
-      if (agent %in% selected_agents) {
-        send_agent_status(
-          agent,
-          "waiting",
-          "Preparing real analysis worker."
-        )
-      } else {
-        send_agent_status(
-          agent,
-          "waiting",
-          "Not selected for this analysis."
-        )
-      }
-    }
-
-    analysis_run <- tryCatch(
-      create_real_analysis_run(data),
-      error = function(error) {
-        real_pipeline_running(FALSE)
-
-        append_analysis_log(
-          paste(
-            "Unable to prepare the real analysis run:",
-            conditionMessage(error)
-          )
-        )
-
-        showNotification(
-          conditionMessage(error),
-          type = "error",
-          duration = 10
-        )
-
-        return(NULL)
-      }
-    )
-
-    if (is.null(analysis_run)) {
-      return()
-    }
+    analysis_run <- tryCatch(create_real_analysis_run(data), error = function(error) {
+      running(FALSE)
+      showNotification(conditionMessage(error), type = "error")
+      NULL
+    })
+    if (is.null(analysis_run)) return()
 
     workers <- list()
-
-    for (agent in selected_agents) {
-
-      send_agent_status(
-        agent,
-        "running",
-        paste(
-          "Running real",
-          toupper(agent),
-          "analysis..."
-        )
+    for (key in selected) {
+      send_progress(key, "running", paste("Running", module_meta[[key]]$title, "…"))
+      workers[[key]] <- tryCatch(
+        start_real_agent_worker(key, analysis_run, 0.05),
+        error = function(error) list(agent = key, launch_error = conditionMessage(error), handled = FALSE)
       )
-
-      append_analysis_log(
-        paste(
-          toupper(agent),
-          "worker started."
-        )
-      )
-
-      worker <- tryCatch(
-        start_real_agent_worker(
-          agent = agent,
-          analysis_run = analysis_run,
-          pvalue_cutoff = 0.05
-        ),
-        error = function(error) {
-          list(
-            agent = agent,
-            launch_error = conditionMessage(error),
-            handled = FALSE
-          )
-        }
-      )
-
-      worker$handled <- FALSE
-      workers[[agent]] <- worker
+      workers[[key]]$handled <- FALSE
     }
-
-    real_workers(workers)
+    workers_value(workers)
   })
 
-
   observe({
+    if (!running()) return()
+    invalidateLater(600, session)
+    workers <- workers_value()
+    results <- results_value()
+    changed <- FALSE
 
-    if (!isTRUE(real_pipeline_running())) {
-      return()
-    }
-
-    invalidateLater(
-      750,
-      session
-    )
-
-    workers <- real_workers()
-
-    if (length(workers) == 0) {
-      return()
-    }
-
-    state_changed <- FALSE
-
-    for (agent in names(workers)) {
-
-      worker <- workers[[agent]]
-
-      if (isTRUE(worker$handled)) {
-        next
-      }
-
+    for (key in names(workers)) {
+      worker <- workers[[key]]
+      if (isTRUE(worker$handled)) next
       if (!is.null(worker$launch_error)) {
-
-        send_agent_status(
-          agent,
-          "error",
-          worker$launch_error
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "worker could not start:",
-            worker$launch_error
-          )
-        )
-
-        worker$handled <- TRUE
-        workers[[agent]] <- worker
-        state_changed <- TRUE
-
-        next
-      }
-
-      process_alive <- tryCatch(
-        worker$process$is_alive(),
-        error = function(error) {
-          FALSE
-        }
-      )
-
-      result_ready <- file.exists(
-        worker$result_file
-      )
-
-      if (process_alive && !result_ready) {
-        next
-      }
-
-      result <- read_real_worker_result(
-        worker
-      )
-
-      if (is.null(result)) {
-        next
-      }
-
-      if (isTRUE(result$success)) {
-
-        send_agent_status(
-          agent,
-          "completed",
-          paste0(
-            toupper(agent),
-            " completed with ",
-            format(
-              result$rows,
-              big.mark = ","
-            ),
-            " result rows."
-          )
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "Agent completed:",
-            result$message
-          )
-        )
-
+        result <- list(success = FALSE, agent = key, message = worker$launch_error, rows = 0L)
       } else {
-
-        send_agent_status(
-          agent,
-          "error",
-          result$message
-        )
-
-        append_analysis_log(
-          paste(
-            toupper(agent),
-            "Agent failed:",
-            result$message
-          )
-        )
+        alive <- tryCatch(worker$process$is_alive(), error = function(error) FALSE)
+        if (alive && !file.exists(worker$result_file)) next
+        result <- read_real_worker_result(worker)
+        if (is.null(result)) next
       }
 
       worker$handled <- TRUE
       worker$result <- result
-      workers[[agent]] <- worker
-      state_changed <- TRUE
-    }
-
-    if (state_changed) {
-      real_workers(workers)
-    }
-
-    successful_count <- sum(
-      vapply(
-        workers,
-        function(worker) {
-          worker_result_succeeded(worker)
-        },
-        logical(1)
-      )
-    )
-
-    completed_agents(successful_count)
-
-    all_finished <- length(workers) > 0 &&
-      all(
-        vapply(
-          workers,
-          function(worker) {
-            isTRUE(worker$handled)
-          },
-          logical(1)
-        )
-      )
-
-    if (!all_finished) {
-      return()
-    }
-
-    real_pipeline_running(FALSE)
-    real_pipeline_finished(TRUE)
-
-    worker_successful_agents <- sum(
-      vapply(
-        workers,
-        function(worker) {
-          worker_result_succeeded(worker)
-        },
-        logical(1)
-      )
-    )
-
-    file_successful_agents <- if (
-      exists("result_files", inherits = TRUE)
-    ) {
-      files_to_check <- get(
-        "result_files",
-        inherits = TRUE
-      )
-
-      sum(
-        vapply(
-          files_to_check,
-          function(agent_files) {
-            is.list(agent_files) &&
-              file.exists(agent_files[["csv"]]) &&
-              file.exists(agent_files[["plot"]])
-          },
-          logical(1)
-        )
-      )
-    } else {
-      0L
-    }
-
-    successful_agents <- max(
-      worker_successful_agents,
-      file_successful_agents
-    )
-
-    completed_agents(successful_agents)
-
-    failed_agents <- max(
-      0L,
-      length(workers) - successful_agents
-    )
-
-    analysis_runtime_seconds(
-      as.integer(
-        difftime(
-          Sys.time(),
-          analysis_start_time(),
-          units = "secs"
-        )
-      )
-    )
-
-    pipeline_message <- if (failed_agents == 0) {
-      paste(
-        "All",
-        successful_agents,
-        "selected agents completed"
-      )
-    } else {
-      paste(
-        successful_agents,
-        "completed and",
-        failed_agents,
-        "failed"
-      )
-    }
-
-    session$sendCustomMessage(
-      type = "agent-status",
-      message = list(
-        pipeline = if (failed_agents == 0) {
-          "completed"
-        } else {
-          "error"
-        },
-        pipeline_message = pipeline_message
-      )
-    )
-
-    append_analysis_log(
-      paste(
-        "Real multi-agent analysis finished.",
-        pipeline_message
-      )
-    )
-
-    showNotification(
-      pipeline_message,
-      type = if (failed_agents == 0) {
-        "message"
+      workers[[key]] <- worker
+      results[[key]] <- result
+      changed <- TRUE
+      if (isTRUE(result$success)) {
+        send_progress(key, "completed", paste(format(result$rows, big.mark = ","), "results"))
       } else {
-        "warning"
-      },
-      duration = 8
+        send_progress(key, "error", result$message)
+      }
+    }
+
+    if (changed) {
+      workers_value(workers)
+      results_value(results)
+    }
+    if (length(workers) && all(vapply(workers, function(x) isTRUE(x$handled), logical(1)))) {
+      running(FALSE)
+      run_finished(Sys.time())
+      showNotification("Analysis run finished.", type = "message")
+    }
+  })
+
+  output$run_overview <- renderUI({
+    results <- results_value()
+    total <- length(selected_value())
+    completed <- sum(vapply(results, function(x) isTRUE(x$success), logical(1)))
+    failed <- length(results) - completed
+    elapsed <- if (is.null(run_started())) 0 else as.integer(difftime(run_finished() %||% Sys.time(), run_started(), units = "secs"))
+    div(
+      class = "run-overview",
+      span(class = "eyebrow", if (running()) "PIPELINE RUNNING" else if (total) "RUN COMPLETE" else "READY"),
+      div(class = "overview-number", paste0(completed, "/", total)),
+      p("modules completed successfully"),
+      div(class = "overview-stats", span(paste(elapsed, "sec")), span(paste(failed, "failed")))
     )
+  })
+
+  `%||%` <- function(value, fallback) if (is.null(value) || !length(value)) fallback else value
+
+  result_table <- function(result) {
+    if (!isTRUE(result$success)) return(NULL)
+    table <- result$result$results
+    if (is.matrix(table)) table <- data.frame(Pathway = rownames(table), table, check.names = FALSE)
+    if (!is.data.frame(table)) return(NULL)
+    table
+  }
+
+  output$results_section <- renderUI({
+    results <- results_value()
+    if (!length(results)) return(NULL)
+    cards <- lapply(names(results), function(key) {
+      result <- results[[key]]
+      data <- result_table(result)
+      meta <- module_meta[[key]]
+      div(
+        class = paste("result-card", if (!isTRUE(result$success)) "result-card-error"),
+        div(class = "result-card-head", div(span(class = "result-kicker", meta$input), h3(meta$title)), span(class = "result-count", if (isTRUE(result$success)) paste(result$rows, "results") else "Failed")),
+        p(class = "result-message", result$message),
+        if (isTRUE(result$success) && !is.null(data) && nrow(data)) {
+          DTOutput(paste0("table_", key))
+        } else if (isTRUE(result$success)) {
+          div(class = "empty-result", "Analysis completed with no significant results.")
+        } else {
+          div(class = "empty-result", "The module did not complete. Review the input requirements and message above.")
+        }
+      )
+    })
+    section(class = "results-section", div(class = "section-heading", span(class = "step", "04"), div(h2("Research results"), p("Top findings from the completed scientific modules"))), div(class = "results-grid", cards))
   })
 
   observe({
-    invalidateLater(1000, session)
-
-    started <- analysis_start_time()
-
-    if (
-      !is.null(started) &&
-      isTRUE(real_pipeline_running()) &&
-      !isTRUE(real_pipeline_finished())
-    ) {
-      elapsed <- as.integer(
-        difftime(
-          Sys.time(),
-          started,
-          units = "secs"
-        )
-      )
-
-      analysis_runtime_seconds(max(elapsed, 0L))
-    }
+    results <- results_value()
+    for (key in names(results)) local({
+      local_key <- key
+      output[[paste0("table_", local_key)]] <- renderDT({
+        data <- result_table(results_value()[[local_key]])
+        validate(need(!is.null(data) && nrow(data), "No result rows"))
+        DT::datatable(utils::head(data, 10), rownames = FALSE, options = list(dom = "t", scrollX = TRUE, pageLength = 10), class = "compact")
+      })
+    })
   })
 
-  output$status <- renderText({
-    if (!is.null(dataset_error())) {
-      return(
-        paste(
-          "[ERROR]",
-          dataset_error()
-        )
-      )
-    }
-
-    data <- dataset_data()
-
-    if (is.null(input$dataset)) {
-      return("[WAITING] No dataset uploaded.")
-    }
-
-    if (is.null(data)) {
-      return(
-        paste(
-          "[READY] File selected:",
-          input$dataset$name,
-          "\nClick Validate Dataset."
-        )
-      )
-    }
-
-    paste0(
-      "[SUCCESS] Dataset loaded\n",
-      "Rows: ", format(nrow(data), big.mark = ","), "\n",
-      "Columns: ", format(ncol(data), big.mark = ","), "\n",
-      "File: ", input$dataset$name
-    )
-  })
-
-  output$validation_summary <- renderUI({
-    data <- dataset_data()
-
-    if (!is.null(dataset_error())) {
-      return(
-        div(
-          class = "validation-state validation-error",
-          div(class = "validation-state-icon", "×"),
-          div(
-            strong("Validation failed"),
-            span(dataset_error())
-          )
-        )
-      )
-    }
-
-    if (is.null(data)) {
-      return(
-        div(
-          class = "validation-state validation-waiting",
-          div(class = "validation-state-icon", "…"),
-          div(
-            strong("Waiting for validation"),
-            span("Upload a file and click Validate Dataset.")
-          )
-        )
-      )
-    }
-
-    div(
-      class = "validation-state validation-success",
-      div(class = "validation-state-icon", "✓"),
-      div(
-        strong("Dataset ready"),
-        span(
-          paste(
-            format(nrow(data), big.mark = ","),
-            "rows and",
-            format(ncol(data), big.mark = ","),
-            "columns detected."
-          )
-        )
-      )
-    )
-  })
-
-  output$dataset_dimensions <- renderUI({
-    data <- dataset_data()
-
-    if (is.null(data)) {
-      return(
-        span(
-          class = "dimension-badge",
-          "No data"
-        )
-      )
-    }
-
-    span(
-      class = "dimension-badge dimension-ready",
-      paste(
-        format(nrow(data), big.mark = ","),
-        "×",
-        format(ncol(data), big.mark = ",")
-      )
-    )
-  })
-
-
-  # -----------------------------------------------------------------------
-  # REAL AGENT VISUALIZATIONS
-  # -----------------------------------------------------------------------
-
-  project_root <- normalizePath(
-    file.path(getwd(), ".."),
-    mustWork = TRUE
-  )
-
-  agent_visualization_paths <- list(
-    go = file.path(
-      project_root,
-      "output",
-      "visualizations",
-      "go_biological_process_dotplot.png"
-    ),
-    kegg = file.path(
-      project_root,
-      "output",
-      "visualizations",
-      "kegg_pathway_dotplot.png"
-    ),
-    gsva = file.path(
-      project_root,
-      "output",
-      "gsva_bowel",
-      "gsva_hallmark_heatmap.png"
-    ),
-    chea = file.path(
-      project_root,
-      "output",
-      "chea_cms4",
-      "chea_tf_dotplot.png"
-    )
-  )
-
-  visualization_panel <- function(
-      path,
-      title,
-      unavailable_message
-  ) {
-    if (!file.exists(path)) {
-      return(
-        div(
-          class = "visualization-empty-state",
-          div(class = "visualization-empty-icon", "⌁"),
-          h4(title),
-          p(unavailable_message)
-        )
-      )
-    }
-
-    extension <- tools::file_ext(path)
-
-    temporary_plot <- tempfile(
-      pattern = "agent-visualization-",
-      fileext = paste0(".", extension)
-    )
-
-    file.copy(
-      from = path,
-      to = temporary_plot,
-      overwrite = TRUE
-    )
-
-    image_data <- base64enc::dataURI(
-      file = temporary_plot,
-      mime = paste0("image/", extension)
-    )
-
-    tags$img(
-      src = image_data,
-      alt = title,
-      class = "agent-result-image"
-    )
+  build_report <- function(file) {
+    results <- results_value()
+    rows <- lapply(names(results), function(key) {
+      result <- results[[key]]
+      data <- result_table(result)
+      preview <- if (!is.null(data) && nrow(data)) paste(capture.output(print(utils::head(data, 10), row.names = FALSE)), collapse = "\n") else "No result rows."
+      paste0("<section><h2>", htmltools::htmlEscape(module_meta[[key]]$title), "</h2><p>", htmltools::htmlEscape(result$message), "</p><pre>", htmltools::htmlEscape(preview), "</pre></section>")
+    })
+    html <- paste0("<!doctype html><html><head><meta charset='utf-8'><title>OncoProfilingTools Report</title><style>body{font-family:Arial,sans-serif;max-width:1100px;margin:40px auto;color:#18212b;line-height:1.5}header,section{border:1px solid #dce3e8;border-radius:12px;padding:24px;margin:18px 0}h1,h2{color:#123c39}pre{overflow:auto;background:#f5f7f8;padding:16px;border-radius:8px}</style></head><body><header><h1>OncoProfilingTools Analysis Report</h1><p>Dataset: ", htmltools::htmlEscape(input$dataset$name), " · Generated ", format(Sys.time(), "%Y-%m-%d %H:%M %Z"), "</p></header>", paste(rows, collapse = ""), "</body></html>")
+    writeLines(html, file, useBytes = TRUE)
   }
 
-  output$go_visualization <- renderUI({
-    visualization_panel(
-      agent_visualization_paths$go,
-      "GO visualization unavailable",
-      paste(
-        "Run the GO analysis and visualization pipeline",
-        "to generate the biological-process dot plot."
-      )
-    )
-  })
+  output$download_report <- downloadHandler(
+    filename = function() paste0("OncoProfilingTools_Report_", format(Sys.Date(), "%Y%m%d"), ".html"),
+    content = build_report,
+    contentType = "text/html"
+  )
 
-  output$kegg_visualization <- renderUI({
-    visualization_panel(
-      agent_visualization_paths$kegg,
-      "No significant KEGG visualization",
-      paste(
-        "The current KEGG results contain zero enriched pathways.",
-        "This is a valid biological result rather than an application error."
-      )
-    )
-  })
-
-  output$gsva_visualization <- renderUI({
-    visualization_panel(
-      agent_visualization_paths$gsva,
-      "GSVA visualization unavailable",
-      paste(
-        "Run GSVA using a valid gene-expression matrix",
-        "to generate the Hallmark pathway heatmap."
-      )
-    )
-  })
-
-  output$chea_visualization <- renderUI({
-    visualization_panel(
-      agent_visualization_paths$chea,
-      "ChEA visualization unavailable",
-      paste(
-        "Run ChEA enrichment to generate",
-        "the transcription-factor dot plot."
-      )
-    )
-  })
-
-
-  output$dataset_preview <- renderDT({
-    data <- dataset_data()
-
-    validate(
-      need(
-        !is.null(data),
-        "Validate a dataset to see its preview."
-      )
-    )
-
-    preview_data <- data |>
-      head(20)
-
-    datatable(
-      preview_data,
-      rownames = FALSE,
-      filter = "top",
-      options = list(
-        pageLength = 10,
-        scrollX = TRUE,
-        autoWidth = TRUE,
-        dom = "tip"
-      ),
-      class = "stripe hover compact"
+  output$final_summary <- renderUI({
+    if (is.null(run_finished())) return(NULL)
+    results <- results_value()
+    selected <- selected_value()
+    status_items <- lapply(names(module_meta), function(key) {
+      state <- if (key %in% names(results) && isTRUE(results[[key]]$success)) "Completed" else if (key %in% selected) "Failed" else "Not executed"
+      div(class = paste("summary-module", tolower(gsub(" ", "-", state))), span(if (state == "Completed") "✓" else if (state == "Failed") "!" else "–"), module_meta[[key]]$title, small(state))
+    })
+    section(
+      class = "panel final-summary",
+      div(class = "summary-head", div(span(class = "eyebrow", "FINAL SUMMARY"), h2("Analysis run complete"), p(input$dataset$name)), downloadButton("download_report", "Download report", class = "report-button")),
+      div(class = "summary-metrics", div(span("Dataset"), strong(input$dataset$name)), div(span("Number of genes"), strong(format(length(profile()$genes), big.mark = ","))), div(span("Modules executed"), strong(length(selected)))),
+      div(class = "summary-modules", status_items)
     )
   })
 }
 
-shinyApp(ui = ui, server = server)
+shinyApp(ui, server)

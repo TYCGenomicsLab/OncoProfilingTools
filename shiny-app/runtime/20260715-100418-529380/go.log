@@ -1,8 +1,0 @@
-[10:04:19] Starting GO agent.
-
-
-'select()' returned 1:many mapping between keys and columns
-Warning message:
-In clusterProfiler::bitr(genes, fromType = "SYMBOL", toType = "ENTREZID",  :
-  0.51% of input gene IDs are fail to map...
-[10:04:46] GO agent completed with 1552 result rows.

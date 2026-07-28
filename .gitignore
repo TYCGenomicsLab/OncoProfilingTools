@@ -23,3 +23,6 @@ example_workbook.xlsx
 .Rhistory
 .RData
 .DS_Store
+
+shiny-app/runtime/
+shiny-app/output/

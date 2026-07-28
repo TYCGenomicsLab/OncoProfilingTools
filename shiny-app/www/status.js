@@ -1,120 +1,36 @@
-(function () {
-  function getCard(agent) {
-    return document.querySelector(
-      '[data-agent="' + agent.toLowerCase() + '"]'
-    );
-  }
-
-  function updateAgentCard(agent, status, message) {
-    const card = getCard(agent);
-
-    if (!card) {
-      return;
-    }
-
-    const normalizedStatus = String(status || "waiting").toLowerCase();
-    const badge = card.querySelector(".agent-status");
-    const messageElement = card.querySelector(".agent-message");
-
-    card.classList.remove(
-      "agent-waiting",
-      "agent-running",
-      "agent-completed",
-      "agent-warning",
-      "agent-failed"
-    );
-
-    card.classList.add("agent-" + normalizedStatus);
-
-    if (badge) {
-      badge.textContent =
-        normalizedStatus.charAt(0).toUpperCase() +
-        normalizedStatus.slice(1);
-    }
-
-    if (messageElement && message) {
-      messageElement.textContent = message;
-    }
-  }
-
-  function updatePipelineStatus(payload) {
-    if (!payload || !payload.agent) {
-      return;
-    }
-
-    updateAgentCard(
-      payload.agent,
-      payload.status,
-      payload.message
-    );
-  }
-
-  document.addEventListener("shiny:connected", function () {
-    ["go", "kegg", "gsva", "chea"].forEach(function (agent) {
-      updateAgentCard(
-        agent,
-        "waiting",
-        "Waiting for analysis to begin."
-      );
+(function(){
+  function onReady(callback){if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',callback);}else{callback();}}
+  onReady(function(){
+    if(!window.Shiny)return;
+    Shiny.addCustomMessageHandler('module-compatibility',function(message){
+      var card=document.getElementById('module-card-'+message.key);
+      var badge=document.getElementById('compat-'+message.key);
+      var input=document.getElementById('module_'+message.key);
+      if(!card||!badge||!input)return;
+      var compatible=Boolean(message.compatible&&message.ready);
+      card.classList.toggle('module-incompatible',message.ready&&!compatible);
+      badge.classList.toggle('compatible',compatible);
+      badge.textContent=!message.ready?'Awaiting data':compatible?'Compatible':'Input required';
+      input.disabled=!compatible;
+      if(message.ready){input.checked=compatible;input.dispatchEvent(new Event('change',{bubbles:true}));}
+    });
+    Shiny.addCustomMessageHandler('analysis-progress',function(message){
+      var row=document.getElementById('progress-'+message.key);
+      if(!row)return;
+      row.className='progress-row progress-'+message.status;
+      var icon=row.querySelector('.progress-indicator');
+      var copy=row.querySelector('.progress-message');
+      if(icon)icon.textContent=message.status==='completed'?'✓':message.status==='error'?'!':message.status==='running'?'↻':message.status==='skipped'?'–':'·';
+      if(copy)copy.textContent=message.message||message.status;
+    });
+    Shiny.addCustomMessageHandler('reset-analysis-ui',function(){
+      document.querySelectorAll('.progress-row').forEach(function(row){
+        row.className='progress-row progress-idle';
+        var icon=row.querySelector('.progress-indicator');
+        var copy=row.querySelector('.progress-message');
+        if(icon)icon.textContent='·';
+        if(copy)copy.textContent='Waiting';
+      });
     });
   });
-
-  if (window.Shiny) {
-    Shiny.addCustomMessageHandler(
-      "agent-status",
-      updatePipelineStatus
-    );
-  }
-
-  window.updateAgentCard = updateAgentCard;
-})();
-
-(function () {
-  function setAgentInputState(message) {
-    const agent = message.agent;
-    const enabled = Boolean(message.enabled);
-
-    const card = document.getElementById(
-      `${agent}-selector-card`
-    );
-
-    const checkbox = document.getElementById(
-      `enable_${agent}`
-    );
-
-    if (!card || !checkbox) {
-      return;
-    }
-
-    checkbox.disabled = !enabled;
-
-    card.classList.toggle(
-      "selector-disabled",
-      !enabled
-    );
-
-    card.classList.toggle(
-      "selector-enabled",
-      enabled
-    );
-
-    if (!enabled) {
-      checkbox.checked = false;
-
-      if (window.Shiny) {
-        Shiny.setInputValue(
-          `enable_${agent}`,
-          false,
-          { priority: "event" }
-        );
-      }
-    }
-  }
-
-  if (window.Shiny) {
-    Shiny.addCustomMessageHandler(
-      "agent-input-state",
-      setAgentInputState
-    );
-  }
 })();
