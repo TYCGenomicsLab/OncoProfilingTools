@@ -10,12 +10,8 @@ output/
 .idea/*
 .DS_Store
 .Rhistory
-<<<<<<< HEAD
-=======
 example_workbook.xlsx
 .example_workbook.xlsx
->>>>>>> 4a3e657 (Add per-sample cell line names to the `DrugSensitivityComparison` object and export this to the excel workbook. Also added comments for clarity in the method.)
-
 # R build and check artifacts
 .Rcheck/
 *.Rcheck/
