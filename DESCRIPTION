@@ -38,7 +38,10 @@ Suggests:
     rmarkdown,
     openxlsx,
     ggplot2,
-    ggrepel
+    ggrepel,
+    DBI,
+    RSQLite,
+    qvalue
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
 Collate:

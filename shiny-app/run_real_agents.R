@@ -295,6 +295,333 @@ extract_gene_list <- function(data) {
 }
 
 
+clean_wikipathways_entrez_ids <- function(values) {
+  values <- trimws(as.character(values))
+  values <- sub("\\.0+$", "", values)
+  values <- values[
+    !is.na(values) &
+      nzchar(values) &
+      grepl("^[0-9]+$", values) &
+      values != "0"
+  ]
+  unique(values)
+}
+
+
+extract_wikipathways_entrez_ids <- function(data) {
+  if (is.null(data) || ncol(data) == 0L) {
+    return(character())
+  }
+
+  normalized_names <- normalise_column_name(names(data))
+  candidates <- c(
+    "entrezid",
+    "entrezgeneid",
+    "ncbigeneid",
+    "ncbigene"
+  )
+  position <- match(candidates, normalized_names, nomatch = 0L)
+  position <- position[position > 0L]
+
+  if (length(position) == 0L) {
+    return(character())
+  }
+
+  clean_wikipathways_entrez_ids(data[[position[[1L]]]])
+}
+
+
+map_wikipathways_symbols_to_entrez <- function(genes) {
+  if (
+    !requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("RSQLite", quietly = TRUE)
+  ) {
+    stop(
+      "WikiPathways symbol mapping requires the DBI and RSQLite packages.",
+      call. = FALSE
+    )
+  }
+
+  database_file <- system.file(
+    "extdata",
+    "org.Hs.eg.sqlite",
+    package = "org.Hs.eg.db"
+  )
+
+  if (!nzchar(database_file) || !file.exists(database_file)) {
+    stop(
+      "The org.Hs.eg.db annotation database is unavailable.",
+      call. = FALSE
+    )
+  }
+
+  connection <- DBI::dbConnect(
+    RSQLite::SQLite(),
+    database_file
+  )
+  on.exit(DBI::dbDisconnect(connection), add = TRUE)
+
+  chunks <- split(
+    genes,
+    ceiling(seq_along(genes) / 900L)
+  )
+  mappings <- lapply(chunks, function(chunk) {
+    quoted_symbols <- DBI::dbQuoteString(connection, chunk)
+    statement <- paste0(
+      "SELECT gi.symbol, g.gene_id ",
+      "FROM gene_info AS gi ",
+      "JOIN genes AS g USING (_id) ",
+      "WHERE gi.symbol IN (",
+      paste(quoted_symbols, collapse = ","),
+      ")"
+    )
+    DBI::dbGetQuery(connection, statement)
+  })
+
+  mapped <- do.call(rbind, mappings)
+  if (is.null(mapped) || nrow(mapped) == 0L) {
+    return(character())
+  }
+
+  clean_wikipathways_entrez_ids(mapped$gene_id)
+}
+
+
+fetch_wikipathways_gmt <- function(cache_directory) {
+  base_url <- "https://data.wikipathways.org/current/gmt/"
+  pattern <- "wikipathways-[0-9]+-gmt-Homo_sapiens\\.gmt"
+
+  dir.create(
+    cache_directory,
+    recursive = TRUE,
+    showWarnings = FALSE
+  )
+  cached_files <- list.files(
+    cache_directory,
+    pattern = paste0("^", pattern, "$"),
+    full.names = TRUE
+  )
+  cached_files <- cached_files[
+    file.info(cached_files)$size > 0
+  ]
+  cached_files <- cached_files[
+    order(basename(cached_files), decreasing = TRUE)
+  ]
+
+  if (
+    length(cached_files) > 0L &&
+      difftime(
+        Sys.time(),
+        file.info(cached_files[[1L]])$mtime,
+        units = "days"
+      ) < 7
+  ) {
+    return(cached_files[[1L]])
+  }
+
+  index <- tryCatch(
+    readLines(base_url, warn = FALSE),
+    error = function(error) {
+      NULL
+    }
+  )
+
+  if (is.null(index)) {
+    if (length(cached_files) > 0L) {
+      return(cached_files[[1L]])
+    }
+    stop(
+      "Could not read the WikiPathways GMT index and no cache is available.",
+      call. = FALSE
+    )
+  }
+
+  matches <- regmatches(
+    index,
+    gregexpr(pattern, index, perl = TRUE)
+  )
+  filenames <- sort(
+    unique(unlist(matches, use.names = FALSE)),
+    decreasing = TRUE
+  )
+
+  if (length(filenames) == 0L) {
+    if (length(cached_files) > 0L) {
+      return(cached_files[[1L]])
+    }
+    stop(
+      "The current human WikiPathways GMT file could not be located.",
+      call. = FALSE
+    )
+  }
+
+  cache_file <- file.path(
+    cache_directory,
+    filenames[[1L]]
+  )
+
+  if (!file.exists(cache_file) || file.info(cache_file)$size == 0) {
+    temporary_file <- tempfile(
+      "wikipathways-",
+      tmpdir = cache_directory,
+      fileext = ".gmt"
+    )
+    on.exit(unlink(temporary_file), add = TRUE)
+
+    tryCatch(
+      utils::download.file(
+        paste0(base_url, filenames[[1L]]),
+        temporary_file,
+        mode = "wb",
+        quiet = TRUE
+      ),
+      error = function(error) {
+        stop(
+          paste(
+            "Could not download the WikiPathways GMT file:",
+            conditionMessage(error)
+          ),
+          call. = FALSE
+        )
+      }
+    )
+
+    if (
+      !file.rename(temporary_file, cache_file) &&
+        !file.exists(cache_file)
+    ) {
+      stop(
+        "The WikiPathways GMT file could not be cached.",
+        call. = FALSE
+      )
+    }
+  }
+
+  cache_file
+}
+
+
+calculate_wikipathways_enrichment <- function(
+  entrez_ids,
+  gmt_file,
+  pvalue_cutoff = 0.05,
+  qvalue_cutoff = 0.20,
+  min_gene_set_size = 10L,
+  max_gene_set_size = 500L
+) {
+  if (!requireNamespace("qvalue", quietly = TRUE)) {
+    stop(
+      "WikiPathways enrichment requires the qvalue package.",
+      call. = FALSE
+    )
+  }
+
+  lines <- readLines(gmt_file, warn = FALSE)
+  fields <- strsplit(lines, "\t", fixed = TRUE)
+  fields <- fields[lengths(fields) >= 3L]
+
+  metadata <- strsplit(
+    vapply(fields, `[[`, character(1), 1L),
+    "%",
+    fixed = TRUE
+  )
+  valid <- lengths(metadata) >= 3L
+  fields <- fields[valid]
+  metadata <- metadata[valid]
+
+  pathway_ids <- vapply(
+    metadata,
+    `[[`,
+    character(1),
+    3L
+  )
+  pathway_names <- vapply(
+    metadata,
+    `[[`,
+    character(1),
+    1L
+  )
+  gene_sets <- lapply(fields, function(values) {
+    unique(values[-c(1L, 2L)])
+  })
+
+  universe <- unique(unlist(gene_sets, use.names = FALSE))
+  input_genes <- intersect(
+    clean_wikipathways_entrez_ids(entrez_ids),
+    universe
+  )
+
+  if (length(input_genes) == 0L) {
+    stop(
+      paste(
+        "None of the supplied genes mapped to the current human",
+        "WikiPathways collection."
+      ),
+      call. = FALSE
+    )
+  }
+
+  gene_set_sizes <- lengths(gene_sets)
+  tested <- gene_set_sizes >= min_gene_set_size &
+    gene_set_sizes <= max_gene_set_size
+  pathway_ids <- pathway_ids[tested]
+  pathway_names <- pathway_names[tested]
+  gene_sets <- gene_sets[tested]
+  gene_set_sizes <- gene_set_sizes[tested]
+
+  overlaps <- lapply(gene_sets, intersect, y = input_genes)
+  counts <- lengths(overlaps)
+  pvalues <- stats::phyper(
+    counts - 1L,
+    gene_set_sizes,
+    length(universe) - gene_set_sizes,
+    length(input_genes),
+    lower.tail = FALSE
+  )
+  adjusted_pvalues <- stats::p.adjust(
+    pvalues,
+    method = "BH"
+  )
+  qvalues <- tryCatch(
+    qvalue::qvalue(pvalues)$qvalues,
+    error = function(error) {
+      rep(NA_real_, length(pvalues))
+    }
+  )
+
+  results <- data.frame(
+    ID = pathway_ids,
+    Description = pathway_names,
+    GeneRatio = paste0(counts, "/", length(input_genes)),
+    BgRatio = paste0(gene_set_sizes, "/", length(universe)),
+    pvalue = pvalues,
+    p.adjust = adjusted_pvalues,
+    qvalue = qvalues,
+    geneID = vapply(
+      overlaps,
+      paste,
+      collapse = "/",
+      FUN.VALUE = character(1)
+    ),
+    Count = counts,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  significant <- results$pvalue <= pvalue_cutoff &
+    results$p.adjust <= pvalue_cutoff &
+    (is.na(results$qvalue) | results$qvalue <= qvalue_cutoff)
+  results <- results[significant, , drop = FALSE]
+  results <- results[order(results$pvalue), , drop = FALSE]
+  rownames(results) <- NULL
+
+  list(
+    results = results,
+    mapped_genes = input_genes
+  )
+}
+
+
 detect_expression_matrix <- function(data) {
   if (is.null(data)) {
     return(FALSE)
@@ -844,17 +1171,88 @@ execute_reactome_agent <- function(genes, pvalue_cutoff = 0.05) {
   )
 }
 
-execute_wikipathways_agent <- function(genes, pvalue_cutoff = 0.05) {
-  stopifnot(requireNamespace("clusterProfiler", quietly = TRUE))
-  output_directory <- file.path(real_agent_project_root, "output", "wikipathways")
-  dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
-  result <- clusterProfiler::enrichWP(gene = unique(genes), organism = "Homo sapiens", pvalueCutoff = pvalue_cutoff, qvalueCutoff = 0.2)
-  results <- as.data.frame(result)
-  csv_file <- file.path(output_directory, "wikipathways_results.csv")
-  plot_file <- file.path(output_directory, "wikipathways_pathways.png")
+execute_wikipathways_agent <- function(
+  genes,
+  entrez_ids = character(),
+  pvalue_cutoff = 0.05
+) {
+  output_directory <- file.path(
+    real_agent_project_root,
+    "output",
+    "wikipathways"
+  )
+  dir.create(
+    output_directory,
+    recursive = TRUE,
+    showWarnings = FALSE
+  )
+
+  entrez_ids <- clean_wikipathways_entrez_ids(entrez_ids)
+  if (length(entrez_ids) == 0L) {
+    entrez_ids <- map_wikipathways_symbols_to_entrez(
+      unique(genes)
+    )
+  }
+
+  gmt_file <- fetch_wikipathways_gmt(
+    file.path(output_directory, "cache")
+  )
+  enrichment <- calculate_wikipathways_enrichment(
+    entrez_ids = entrez_ids,
+    gmt_file = gmt_file,
+    pvalue_cutoff = pvalue_cutoff,
+    qvalue_cutoff = 0.20
+  )
+  results <- enrichment$results
+
+  csv_file <- file.path(
+    output_directory,
+    "wikipathways_results.csv"
+  )
+  plot_file <- file.path(
+    output_directory,
+    "wikipathways_pathways.png"
+  )
   readr::write_csv(results, csv_file)
-  save_enrichment_dotplot(results, plot_file, "WikiPathways Enrichment")
-  list(success = TRUE, agent = "wikipathways", result = list(results = results), csv = csv_file, plot = plot_file, rows = nrow(results), message = paste("WikiPathways identified", nrow(results), "enriched pathways."))
+  save_enrichment_dotplot(
+    results,
+    plot_file,
+    "WikiPathways Enrichment"
+  )
+
+  interpretation_note <- if (length(unique(genes)) > 5000L) {
+    paste(
+      "The input contained",
+      format(length(unique(genes)), big.mark = ","),
+      paste(
+        "genes; over-representation results are usually most meaningful",
+        "for a filtered significant-gene set."
+      )
+    )
+  } else {
+    ""
+  }
+
+  list(
+    success = TRUE,
+    agent = "wikipathways",
+    result = list(
+      results = results,
+      input_genes = unique(genes),
+      mapped_genes = enrichment$mapped_genes
+    ),
+    csv = csv_file,
+    plot = plot_file,
+    rows = nrow(results),
+    message = paste(
+      "WikiPathways identified",
+      nrow(results),
+      "enriched pathways from",
+      length(enrichment$mapped_genes),
+      "mapped Entrez genes.",
+      interpretation_note
+    )
+  )
 }
 
 execute_hallmark_agent <- function(genes, pvalue_cutoff = 0.05) {
@@ -1216,7 +1614,11 @@ run_selected_real_agent <- function(
           pvalue_cutoff = pvalue_cutoff
         ),
 
-        wikipathways = execute_wikipathways_agent(genes = gene_input$genes, pvalue_cutoff = pvalue_cutoff),
+        wikipathways = execute_wikipathways_agent(
+          genes = gene_input$genes,
+          entrez_ids = extract_wikipathways_entrez_ids(data),
+          pvalue_cutoff = pvalue_cutoff
+        ),
 
         string = execute_string_agent(
           genes = gene_input$genes
