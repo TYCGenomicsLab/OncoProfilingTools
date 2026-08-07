@@ -23,7 +23,7 @@
       if(icon)icon.textContent=message.status==='completed'?'✓':message.status==='error'?'!':message.status==='running'?'↻':message.status==='skipped'?'–':'·';
       if(copy)copy.textContent=message.message||message.status;
     });
-    Shiny.addCustomMessageHandler('reset-analysis-ui',function(){
+    Shiny.addCustomMessageHandler('reset-analysis-ui',function(message){
       document.querySelectorAll('.progress-row').forEach(function(row){
         row.className='progress-row progress-idle';
         var icon=row.querySelector('.progress-indicator');

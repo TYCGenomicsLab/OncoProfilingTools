@@ -1,24 +1,32 @@
+# Local research inputs and generated analysis artifacts
 data/
 output/
+shiny-app/runtime/
+shiny-app/output/
+shiny-app/.Rapp.history
+shiny-app/runtime-test/
+
+# R build, session, and check artifacts
 .RData
-.Rproj.user
-.cache
-.cache/*
-/.cache
-.idea
-./idea
-.idea/*
-.DS_Store
 .Rhistory
-example_workbook.xlsx
-.example_workbook.xlsx
-# R build and check artifacts
+.Rproj.user/
 .Rcheck/
 *.Rcheck/
 *.tar.gz
-.Rhistory
-.RData
-.DS_Store
+.cache/
 
-shiny-app/runtime/
-shiny-app/output/
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Local backups and generated delivery artifacts
+backup-before-*/
+repair-backup/
+old-results-backup*/
+output-backup-*/
+example_workbook.xlsx
+.example_workbook.xlsx
+*.xlsx
+*.docx
+*.zip

@@ -1,7 +1,0 @@
-[09:51:50] Starting CHEA agent.
-Uploading data to Enrichr... Done.
-  Querying ChEA_2022... Done.
-Parsing results... Done.
-Error in file.copy(source_csv, canonical_csv, overwrite = TRUE) : 
-  file can not be copied both 'from' and 'to'
-Execution halted

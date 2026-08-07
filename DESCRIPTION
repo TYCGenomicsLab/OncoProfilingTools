@@ -33,6 +33,8 @@ Imports:
 Remotes:
     ElianHugh/enumr@main
 Suggests:
+    jsonlite,
+    testthat (>= 3.0.0),
     roxygen2,
     knitr,
     rmarkdown,
@@ -41,9 +43,20 @@ Suggests:
     ggrepel,
     DBI,
     RSQLite,
-    qvalue
+    qvalue,
+    shiny,
+    readr,
+    DT,
+    processx,
+    htmltools,
+    base64enc,
+    enrichR,
+    GSVA,
+    pheatmap,
+    igraph
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
+Config/testthat/edition: 3
 Collate:
     'agent-chea.R'
     'agent-go.R'

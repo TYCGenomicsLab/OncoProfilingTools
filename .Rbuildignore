@@ -3,14 +3,13 @@
 ^vignettes$
 ^\.cache$
 ^\.idea$
-\vignettes
-
 ^\.github$
 ^\.vscode$
-^backup-before-combined-report$
+^data$
 ^output$
-^shiny-app/backup$
 ^shiny-app/runtime$
+^shiny-app/runtime-test$
+^shiny-app/\.Rapp\.history$
 ^shiny-app/runs$
 ^.*\.Rcheck$
 ^OncoProfilingTools_[0-9.]+\.tar\.gz$

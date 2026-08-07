@@ -8,6 +8,7 @@ suppressPackageStartupMessages({
 
 source("real_pipeline.R", local = TRUE)
 source("run_real_agents.R", local = TRUE)
+source("interpretation.R", local = TRUE)
 source("results_helpers.R", local = TRUE)
 
 # Semantic HTML helpers are not exported as top-level Shiny functions.
@@ -41,7 +42,11 @@ read_dataset <- function(path, name) {
 }
 
 dataset_profile <- function(data) {
-  empty <- list(gene = FALSE, expression = FALSE, drug = FALSE, genes = character(), gene_column = NULL)
+  empty <- list(
+    gene = FALSE, expression = FALSE, drug = FALSE,
+    genes = character(), analysis_genes = character(), gene_column = NULL,
+    selection_note = NULL, selection_error = NULL
+  )
   if (is.null(data) || nrow(data) == 0L || ncol(data) == 0L) return(empty)
 
   normalized <- normalise_column_name(names(data))
@@ -64,12 +69,28 @@ dataset_profile <- function(data) {
   response <- any(normalized %in% c("ic50", "auc", "viability", "sensitivity", "response", "lnic50"))
   wide_prism <- any(grepl("BRD:", names(data), fixed = TRUE))
 
+  selection <- NULL
+  selection_error <- NULL
+  if (length(genes) >= 2L) {
+    selection <- tryCatch(
+      prepare_gene_input(data),
+      error = function(error) {
+        selection_error <<- conditionMessage(error)
+        NULL
+      }
+    )
+  }
+  analysis_genes <- if (is.null(selection)) character() else selection$genes
+
   list(
-    gene = length(genes) >= 2L,
+    gene = length(analysis_genes) >= 2L,
     expression = expression,
     drug = (compound && response) || wide_prism,
     genes = genes,
-    gene_column = gene_column
+    analysis_genes = analysis_genes,
+    gene_column = gene_column,
+    selection_note = if (is.null(selection)) NULL else selection$selection_note,
+    selection_error = selection_error
   )
 }
 
@@ -87,6 +108,19 @@ module_card <- function(key, meta) {
   )
 }
 
+module_selector_group <- function(group_id, group) {
+  keys <- intersect(group$keys, names(module_meta))
+  div(
+    class = paste("module-selector-group", paste0("module-selector-", group_id)),
+    div(
+      class = "module-group-heading",
+      div(h3(group$title), p(group$description)),
+      span(paste(length(keys), if (length(keys) == 1L) "agent" else "agents"))
+    ),
+    div(class = "module-grid", Map(module_card, keys, module_meta[keys]))
+  )
+}
+
 progress_row <- function(key, meta) {
   div(
     id = paste0("progress-", key), class = "progress-row progress-idle",
@@ -99,8 +133,8 @@ ui <- fluidPage(
   tags$head(
     tags$title("OncoProfilingTools"),
     tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
-    tags$link(rel = "stylesheet", href = "styles.css?v=research-dashboard-1"),
-    tags$script(src = "status.js?v=research-dashboard-1")
+    tags$link(rel = "stylesheet", href = "styles.css?v=release-candidate-4"),
+    tags$script(src = "status.js?v=results-center-polish-2")
   ),
   div(
     class = "app-shell",
@@ -108,7 +142,7 @@ ui <- fluidPage(
       class = "site-header",
       div(class = "brand-mark", "OP"),
       div(class = "brand-copy", h1("OncoProfilingTools"), p("Agentic AI Platform for Cancer Pharmacogenomics")),
-      div(class = "system-status", span(), "Research workspace")
+      div(class = "system-status", span(), "Local-only workspace")
     ),
 
     main(
@@ -117,9 +151,9 @@ ui <- fluidPage(
         class = "hero-panel",
         div(
           class = "hero-copy",
-          span(class = "eyebrow", "BIOMARKER DISCOVERY WORKSPACE"),
-          h2("From genomic profiles to interpretable evidence"),
-          p("Run validated enrichment, network, immune, and pharmacogenomic analyses through one reproducible workflow.")
+          span(class = "eyebrow", "PRIVATE BIOMARKER DISCOVERY WORKSPACE"),
+          h2("Analyze once. Explore every biological signal."),
+          p("Validated enrichment, network, immune, and pharmacogenomic workflows with local interpretation and exportable evidence.")
         ),
         div(class = "hero-facts", div(strong(as.character(length(module_meta))), span("Analysis modules")), div(strong("Real"), span("Scientific backends")))
       ),
@@ -136,13 +170,29 @@ ui <- fluidPage(
             fileInput("dataset", label = NULL, accept = c(".csv", ".tsv", ".txt"), buttonLabel = "Choose file", placeholder = "No file selected")
           ),
           uiOutput("dataset_status"),
-          uiOutput("dataset_metrics")
+          uiOutput("dataset_metrics"),
+          uiOutput("gene_selection_note")
         ),
 
         section(
           class = "panel module-panel",
           div(class = "section-heading", span(class = "step", "02"), div(h2("Analysis modules"), p("Only scientifically compatible modules will execute"))),
-          div(class = "module-grid", Map(module_card, names(module_meta), module_meta)),
+          lapply(names(agent_groups), function(group_id) module_selector_group(group_id, agent_groups[[group_id]])),
+          tags$details(
+            class = "ollama-settings",
+            tags$summary("Local biological interpretation settings"),
+            div(
+              class = "ollama-settings-body",
+              checkboxInput("ollama_enabled", "Use local Ollama when available", value = TRUE),
+              div(
+                class = "ollama-settings-grid",
+                textInput("ollama_host", "Ollama host", value = "http://127.0.0.1:11434"),
+                textInput("ollama_model", "Model", value = "llama3.1:8b"),
+                numericInput("ollama_timeout", "Generation timeout (seconds)", value = 180, min = 30, max = 600, step = 30)
+              ),
+              p("All prompts stay on this computer. Only localhost, 127.0.0.1, or [::1] are accepted. Interpretation runs in a background process and safely falls back if the local model cannot respond.")
+            )
+          ),
           actionButton("run_analysis", "Run analysis", class = "primary-button", icon = icon("play")),
           p(class = "run-note", "Modules requiring a different input type are retained in the summary as not executed.")
         )
@@ -154,8 +204,8 @@ ui <- fluidPage(
         div(class = "progress-layout", div(class = "progress-list", Map(progress_row, names(module_meta), module_meta)), uiOutput("run_overview"))
       ),
 
-      uiOutput("results_center"),
-      uiOutput("final_summary")
+      uiOutput("final_summary"),
+      uiOutput("results_center")
     ),
     footer(class = "site-footer", span("OncoProfilingTools · Research use only"), span("Biological findings require expert validation"))
   )
@@ -171,8 +221,22 @@ server <- function(input, output, session) {
   run_finished <- reactiveVal(NULL)
   running <- reactiveVal(FALSE)
 
+  ollama_settings <- reactive({
+    list(
+      enabled = isTRUE(input$ollama_enabled),
+      host = input$ollama_host %or_else% "http://127.0.0.1:11434",
+      model = input$ollama_model %or_else% "llama3.1:8b",
+      timeout_seconds = input$ollama_timeout %or_else% 180,
+      num_predict = 1800
+    )
+  })
+
+  analysis_complete <- reactive({
+    !running() && !is.null(run_finished())
+  })
+
   stop_active_workers <- function() {
-    workers <- workers_value()
+    workers <- shiny::isolate(workers_value())
     if (!length(workers)) return(invisible(NULL))
 
     for (worker in workers) {
@@ -229,7 +293,14 @@ server <- function(input, output, session) {
     results_center_ui(selected_value())
   })
 
-  register_results_server(input, output, session, selected_value)
+  results_controller <- register_results_server(
+    input,
+    output,
+    session,
+    active_agents = selected_value,
+    analysis_complete = analysis_complete,
+    ollama_settings = ollama_settings
+  )
 
   profile <- reactive(dataset_profile(data_value()))
 
@@ -278,8 +349,26 @@ server <- function(input, output, session) {
       class = "dataset-metrics",
       div(span("Rows"), strong(format(nrow(data), big.mark = ","))),
       div(span("Columns"), strong(format(ncol(data), big.mark = ","))),
-      div(span("Genes"), strong(format(length(p$genes), big.mark = ","))),
+      div(
+        span("Analysis genes"),
+        strong(paste0(format(length(p$analysis_genes), big.mark = ","), " / ", format(length(p$genes), big.mark = ",")))
+      ),
       div(span("Compatible"), strong(sum(compatibility())))
+    )
+  })
+
+  output$gene_selection_note <- renderUI({
+    if (is.null(data_value())) return(NULL)
+    p <- profile()
+    if (!is.null(p$selection_error)) {
+      return(div(class = "gene-selection-note gene-selection-warning", strong("Gene-list input needs attention"), p$selection_error))
+    }
+    if (is.null(p$selection_note)) return(NULL)
+    div(
+      class = "gene-selection-note",
+      strong("Automatic gene-set preparation"),
+      p$selection_note,
+      tags$small("For directional biology, upload up- and down-regulated signatures as separate runs.")
     )
   })
 
@@ -435,15 +524,11 @@ server <- function(input, output, session) {
   })
 
   build_report <- function(file) {
-    results <- results_value()
-    rows <- lapply(names(results), function(key) {
-      result <- results[[key]]
-      data <- result_table(result)
-      preview <- if (!is.null(data) && nrow(data)) paste(capture.output(print(utils::head(data, 10), row.names = FALSE)), collapse = "\n") else "No result rows."
-      paste0("<section><h2>", htmltools::htmlEscape(module_meta[[key]]$title), "</h2><p>", htmltools::htmlEscape(result$message), "</p><pre>", htmltools::htmlEscape(preview), "</pre></section>")
-    })
-    html <- paste0("<!doctype html><html><head><meta charset='utf-8'><title>OncoProfilingTools Report</title><style>body{font-family:Arial,sans-serif;max-width:1100px;margin:40px auto;color:#18212b;line-height:1.5}header,section{border:1px solid #dce3e8;border-radius:12px;padding:24px;margin:18px 0}h1,h2{color:#123c39}pre{overflow:auto;background:#f5f7f8;padding:16px;border-radius:8px}</style></head><body><header><h1>OncoProfilingTools Analysis Report</h1><p>Dataset: ", htmltools::htmlEscape(input$dataset$name), " · Generated ", format(Sys.time(), "%Y-%m-%d %H:%M %Z"), "</p></header>", paste(rows, collapse = ""), "</body></html>")
-    writeLines(html, file, useBytes = TRUE)
+    build_combined_html_report(
+      destination = file,
+      interpretation_bundle = results_controller$interpretation_bundle(),
+      selected_agents = selected_value()
+    )
   }
 
   output$download_report <- downloadHandler(
@@ -458,12 +543,12 @@ server <- function(input, output, session) {
     selected <- selected_value()
     status_items <- lapply(names(module_meta), function(key) {
       state <- if (key %in% names(results) && isTRUE(results[[key]]$success)) "Completed" else if (key %in% selected) "Failed" else "Not executed"
-      div(class = paste("summary-module", tolower(gsub(" ", "-", state))), span(if (state == "Completed") "✓" else if (state == "Failed") "!" else "–"), module_meta[[key]]$title, small(state))
+      div(class = paste("summary-module", tolower(gsub(" ", "-", state))), span(if (state == "Completed") "✓" else if (state == "Failed") "!" else "–"), module_meta[[key]]$title, tags$small(state))
     })
     section(
       class = "panel final-summary",
       div(class = "summary-head", div(span(class = "eyebrow", "FINAL SUMMARY"), h2("Analysis run complete"), p(input$dataset$name)), downloadButton("download_report", "Download report", class = "report-button")),
-      div(class = "summary-metrics", div(span("Dataset"), strong(input$dataset$name)), div(span("Number of genes"), strong(format(length(profile()$genes), big.mark = ","))), div(span("Modules executed"), strong(length(selected)))),
+      div(class = "summary-metrics", div(span("Dataset"), strong(input$dataset$name)), div(span("Analysis genes"), strong(paste0(format(length(profile()$analysis_genes), big.mark = ","), " / ", format(length(profile()$genes), big.mark = ",")))), div(span("Modules executed"), strong(length(selected)))),
       div(class = "summary-modules", status_items)
     )
   })

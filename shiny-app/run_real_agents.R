@@ -260,7 +260,26 @@ clean_gene_symbols <- function(values) {
 }
 
 
-extract_gene_list <- function(data) {
+detect_analysis_column <- function(data, candidates, pattern = NULL) {
+  normalized <- normalise_column_name(names(data))
+  position <- match(candidates, normalized, nomatch = 0L)
+  position <- position[position > 0L]
+  if (length(position)) return(names(data)[position[[1L]]])
+  if (!is.null(pattern)) {
+    position <- which(grepl(pattern, normalized))
+    if (length(position)) return(names(data)[position[[1L]]])
+  }
+  NULL
+}
+
+
+prepare_gene_input <- function(
+  data,
+  pvalue_cutoff = 0.05,
+  effect_cutoff = 1,
+  max_genes = 2000L,
+  max_unranked_genes = 5000L
+) {
   gene_column <- detect_gene_column(data)
 
   if (is.null(gene_column)) {
@@ -273,11 +292,12 @@ extract_gene_list <- function(data) {
     )
   }
 
-  genes <- clean_gene_symbols(
-    data[[gene_column]]
-  )
+  raw_genes <- trimws(as.character(data[[gene_column]]))
+  usable <- !is.na(raw_genes) & nzchar(raw_genes) &
+    !tolower(raw_genes) %in% c("na", "nan", "null", "gene", "gene_symbol", "symbol")
+  original_gene_count <- length(unique(raw_genes[usable]))
 
-  if (length(genes) == 0) {
+  if (original_gene_count == 0L) {
     stop(
       paste(
         "The detected gene column",
@@ -288,10 +308,137 @@ extract_gene_list <- function(data) {
     )
   }
 
-  list(
-    genes = genes,
-    column = gene_column
+  adjusted_p_column <- detect_analysis_column(
+    data,
+    c("padj", "adjustedpvalue", "adjustedp", "adjpvalue", "adjp", "fdr", "qvalue"),
+    pattern = "^(padj|fdr|qvalue)|adjusted.*pvalue"
   )
+  if (is.null(adjusted_p_column)) {
+    adjusted_p_column <- detect_analysis_column(
+      data,
+      c("pvalue", "pval", "pvalue2sided"),
+      pattern = "^pvalue$|^pval$"
+    )
+  }
+  effect_column <- detect_analysis_column(
+    data,
+    c(
+      "log2foldchange", "logfoldchange", "log2fc", "logfc",
+      "avglog2fc", "avglogfc", "difference", "diff", "effectsize"
+    ),
+    pattern = "log2?.*fold.*change|(^|mean)diff|diff.*(minus|vs)|effectsize"
+  )
+
+  selected <- usable
+  p_values <- NULL
+  effects <- NULL
+  selection_parts <- character()
+
+  if (!is.null(adjusted_p_column)) {
+    p_values <- suppressWarnings(as.numeric(as.character(data[[adjusted_p_column]])))
+    selected <- selected & is.finite(p_values) & p_values <= pvalue_cutoff
+    selection_parts <- c(
+      selection_parts,
+      paste0(adjusted_p_column, " ≤ ", format(pvalue_cutoff, trim = TRUE))
+    )
+  }
+
+  if (!is.null(effect_column)) {
+    effects <- suppressWarnings(as.numeric(as.character(data[[effect_column]])))
+    base_selected <- selected
+    selected_with_effect <- base_selected & is.finite(effects) & abs(effects) >= effect_cutoff
+
+    if (sum(selected_with_effect) < 2L && !is.null(p_values)) {
+      selected_with_effect <- base_selected & is.finite(effects) & abs(effects) >= 0.5
+      if (sum(selected_with_effect) >= 2L) effect_cutoff <- 0.5
+    }
+    if (sum(selected_with_effect) < 2L && !is.null(p_values)) {
+      selected_with_effect <- base_selected
+      effect_column <- NULL
+      effects <- NULL
+    }
+    selected <- selected_with_effect
+    if (!is.null(effect_column)) {
+      selection_parts <- c(
+        selection_parts,
+        paste0("|", effect_column, "| ≥ ", format(effect_cutoff, trim = TRUE))
+      )
+    }
+  }
+
+  has_statistics <- !is.null(adjusted_p_column) || !is.null(effect_column)
+  if (!has_statistics && original_gene_count > max_unranked_genes) {
+    stop(
+      paste0(
+        "The uploaded table contains ", format(original_gene_count, big.mark = ","),
+        " genes but no p-value or effect-size column was detected. ",
+        "A near-whole-genome list is not a meaningful over-representation input. ",
+        "Upload a filtered gene list or include columns such as adjusted p-value and log2 fold change."
+      ),
+      call. = FALSE
+    )
+  }
+
+  selected_rows <- which(selected)
+  if (!length(selected_rows)) {
+    stop(
+      paste0(
+        "No genes passed the automatic analysis filter",
+        if (length(selection_parts)) paste0(" (", paste(selection_parts, collapse = "; "), ")") else "",
+        ". Review the input statistics or upload a curated gene list."
+      ),
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(p_values)) {
+    selected_rows <- selected_rows[order(
+      p_values[selected_rows],
+      if (!is.null(effects)) -abs(effects[selected_rows]) else seq_along(selected_rows),
+      na.last = TRUE
+    )]
+  } else if (!is.null(effects)) {
+    selected_rows <- selected_rows[order(-abs(effects[selected_rows]), na.last = TRUE)]
+  }
+
+  selected_rows <- utils::head(selected_rows, max(2L, as.integer(max_genes)))
+  selected_genes <- raw_genes[selected_rows]
+  unique_rows <- !duplicated(selected_genes)
+  selected_rows <- selected_rows[unique_rows]
+  selected_genes <- selected_genes[unique_rows]
+
+  if (length(selected_genes) < 2L) {
+    stop("At least two genes must pass the analysis filter.", call. = FALSE)
+  }
+
+  method <- if (length(selection_parts)) {
+    paste(selection_parts, collapse = " and ")
+  } else {
+    "the supplied curated gene list"
+  }
+  capped <- sum(selected) > length(selected_genes)
+  selection_note <- paste0(
+    "Analysis used ", format(length(selected_genes), big.mark = ","), " of ",
+    format(original_gene_count, big.mark = ","), " usable genes using ", method,
+    if (capped) paste0(" (capped at the ", format(length(selected_genes), big.mark = ","), " strongest rows)") else "",
+    if (!is.null(effects)) "; positive and negative effects are combined" else "",
+    "."
+  )
+
+  list(
+    genes = selected_genes,
+    column = gene_column,
+    data = data[selected_rows, , drop = FALSE],
+    original_gene_count = original_gene_count,
+    selection_note = selection_note,
+    pvalue_column = adjusted_p_column,
+    effect_column = effect_column
+  )
+}
+
+
+extract_gene_list <- function(data) {
+  prepare_gene_input(data)
 }
 
 
@@ -825,11 +972,16 @@ save_enrichment_dotplot <- function(
     return(FALSE)
   }
 
+  display_labels <- gsub("_", " ", as.character(plot_data[[term_column]]), fixed = TRUE)
+  display_labels <- sub("^HALLMARK ", "", display_labels)
+  display_labels <- vapply(
+    display_labels,
+    function(label) paste(strwrap(label, width = 52), collapse = "\n"),
+    character(1)
+  )
   plot_data$display_term <- factor(
-    plot_data[[term_column]],
-    levels = rev(
-      plot_data[[term_column]]
-    )
+    display_labels,
+    levels = rev(unique(display_labels))
   )
 
   plot_data$significance <- -log10(
@@ -1010,6 +1162,108 @@ save_chea_dotplot <- function(
     dpi = 300
   )
 
+  file.exists(output_file)
+}
+
+
+save_string_network_plot <- function(result, output_file, max_nodes = 35L) {
+  nodes <- as.data.frame(if (is.null(result$nodes)) data.frame() else result$nodes, stringsAsFactors = FALSE)
+  interactions <- as.data.frame(if (is.null(result$interactions)) data.frame() else result$interactions, stringsAsFactors = FALSE)
+
+  required_node_columns <- c("STRING_id", "gene_symbol", "degree")
+  if (!nrow(nodes) || !all(required_node_columns %in% names(nodes))) {
+    if (file.exists(output_file)) unlink(output_file)
+    return(FALSE)
+  }
+
+  nodes$degree <- suppressWarnings(as.numeric(nodes$degree))
+  nodes <- nodes[is.finite(nodes$degree) & nodes$degree > 0, , drop = FALSE]
+  nodes <- nodes[order(nodes$degree, decreasing = TRUE), , drop = FALSE]
+  nodes <- utils::head(nodes, as.integer(max_nodes))
+  if (!nrow(nodes)) {
+    if (file.exists(output_file)) unlink(output_file)
+    return(FALSE)
+  }
+
+  can_draw_network <- requireNamespace("igraph", quietly = TRUE) &&
+    nrow(interactions) > 0L && all(c("from", "to") %in% names(interactions))
+
+  if (can_draw_network) {
+    selected_ids <- as.character(nodes$STRING_id)
+    edges <- interactions[
+      as.character(interactions$from) %in% selected_ids &
+        as.character(interactions$to) %in% selected_ids,
+      ,
+      drop = FALSE
+    ]
+
+    if (nrow(edges)) {
+      edge_table <- data.frame(
+        from = as.character(edges$from),
+        to = as.character(edges$to),
+        stringsAsFactors = FALSE
+      )
+      vertices <- data.frame(
+        name = as.character(nodes$STRING_id),
+        label = as.character(nodes$gene_symbol),
+        degree = nodes$degree,
+        stringsAsFactors = FALSE
+      )
+      graph <- igraph::graph_from_data_frame(edge_table, directed = FALSE, vertices = vertices)
+      graph <- igraph::simplify(graph, remove.multiple = TRUE, remove.loops = TRUE)
+
+      grDevices::png(output_file, width = 2400, height = 1700, res = 220, bg = "white")
+      set.seed(42L)
+      layout <- igraph::layout_with_fr(graph)
+      degree_values <- igraph::vertex_attr(graph, "degree")
+      label_values <- igraph::vertex_attr(graph, "label")
+      size_values <- 8 + 11 * sqrt(degree_values / max(degree_values))
+      color_values <- grDevices::colorRampPalette(c("#4f9bd8", "#2e648f", "#173b5b"))(length(degree_values))
+      color_values <- color_values[rank(degree_values, ties.method = "first")]
+      plot(
+        graph,
+        layout = layout,
+        vertex.size = size_values,
+        vertex.color = color_values,
+        vertex.frame.color = "#0b263d",
+        vertex.label = label_values,
+        vertex.label.color = "white",
+        vertex.label.cex = 0.68,
+        edge.color = grDevices::adjustcolor("#7e9bb4", alpha.f = 0.38),
+        edge.width = 0.8,
+        main = "STRING Protein Interaction Network — Top Connected Proteins",
+        margin = 0.08
+      )
+      grDevices::dev.off()
+      return(file.exists(output_file))
+    }
+  }
+
+  plot_data <- utils::head(nodes, 20L)
+  plot_data$gene_symbol <- factor(
+    plot_data$gene_symbol,
+    levels = rev(plot_data$gene_symbol)
+  )
+  graph <- ggplot2::ggplot(
+    plot_data,
+    ggplot2::aes(x = degree, y = gene_symbol)
+  ) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = 0, xend = degree, yend = gene_symbol),
+      color = "#aecbe1",
+      linewidth = 0.8
+    ) +
+    ggplot2::geom_point(size = 4, color = "#2e79b7") +
+    ggplot2::labs(
+      title = "STRING Protein Interaction Hubs",
+      subtitle = "Network view fallback: proteins ranked by interaction degree",
+      x = "Interaction degree",
+      y = NULL
+    ) +
+    ggplot2::theme_classic(base_size = 11) +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold"))
+
+  ggplot2::ggsave(output_file, graph, width = 10, height = 7, dpi = 300)
   file.exists(output_file)
 }
 
@@ -1259,7 +1513,7 @@ execute_hallmark_agent <- function(genes, pvalue_cutoff = 0.05) {
   stopifnot(requireNamespace("msigdbr", quietly = TRUE), requireNamespace("clusterProfiler", quietly = TRUE))
   output_directory <- file.path(real_agent_project_root, "output", "hallmark")
   dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
-  sets <- msigdbr::msigdbr(species = "Homo sapiens", category = "H")
+  sets <- msigdbr::msigdbr(species = "Homo sapiens", collection = "H")
   term2gene <- sets[, c("gs_name", "gene_symbol")]
   result <- clusterProfiler::enricher(gene = unique(genes), TERM2GENE = term2gene, pvalueCutoff = pvalue_cutoff, qvalueCutoff = 0.2)
   results <- as.data.frame(result)
@@ -1277,12 +1531,15 @@ execute_string_agent <- function(genes) {
   result <- run_string_agent(genes = genes)
   csv_file <- file.path(output_directory, "string_hub_proteins.csv")
   interaction_file <- file.path(output_directory, "string_interactions.csv")
+  plot_file <- file.path(output_directory, "string_network.png")
   readr::write_csv(result$top_hubs, csv_file)
   readr::write_csv(result$interactions, interaction_file)
+  save_string_network_plot(result, plot_file)
 
   list(
     success = TRUE, agent = "string", result = result,
-    csv = csv_file, plot = NA_character_, rows = nrow(result$top_hubs),
+    csv = csv_file, interactions = interaction_file, plot = plot_file,
+    rows = nrow(result$top_hubs),
     message = result$summary
   )
 }
@@ -1582,8 +1839,9 @@ run_selected_real_agent <- function(
       if (agent == "immune") return(execute_immune_agent(data))
       if (agent == "drug") return(execute_drug_agent(data))
 
-      gene_input <- extract_gene_list(
-        data
+      gene_input <- prepare_gene_input(
+        data,
+        pvalue_cutoff = pvalue_cutoff
       )
 
       if (length(gene_input$genes) < 2) {
@@ -1616,7 +1874,7 @@ run_selected_real_agent <- function(
 
         wikipathways = execute_wikipathways_agent(
           genes = gene_input$genes,
-          entrez_ids = extract_wikipathways_entrez_ids(data),
+          entrez_ids = extract_wikipathways_entrez_ids(gene_input$data),
           pvalue_cutoff = pvalue_cutoff
         ),
 
@@ -1643,6 +1901,9 @@ run_selected_real_agent <- function(
       result$input_gene_count <- length(
         gene_input$genes
       )
+      result$original_gene_count <- gene_input$original_gene_count
+      result$selection_note <- gene_input$selection_note
+      result$message <- paste(result$message, gene_input$selection_note)
 
       result
     },

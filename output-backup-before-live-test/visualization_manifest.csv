@@ -1,5 +1,0 @@
-agent,visualization,ready,status
-GO,output/visualizations/go_biological_process_dotplot.png,TRUE,12 GO terms plotted successfully
-KEGG,output/visualizations/kegg_pathway_dotplot.png,FALSE,KEGG analysis returned zero enriched pathways; no KEGG plot was generated
-GSVA,output/gsva_bowel/gsva_hallmark_heatmap.png,TRUE,GSVA Hallmark heatmap exists
-ChEA,output/chea_cms4/chea_tf_dotplot.png,TRUE,ChEA transcription-factor dot plot exists
