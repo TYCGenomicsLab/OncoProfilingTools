@@ -1268,6 +1268,203 @@ save_string_network_plot <- function(result, output_file, max_nodes = 35L) {
 }
 
 
+save_immune_composition_plot <- function(
+  result_data,
+  output_file,
+  max_cell_types = 30L,
+  max_samples = 40L
+) {
+  remove_stale_plot <- function() {
+    if (file.exists(output_file)) unlink(output_file)
+    FALSE
+  }
+
+  result_data <- as.data.frame(result_data, stringsAsFactors = FALSE)
+  if (!nrow(result_data) || ncol(result_data) < 2L) {
+    return(remove_stale_plot())
+  }
+
+  normalized_names <- tolower(gsub("[^a-z0-9]", "", names(result_data)))
+  cell_type_candidates <- c("celltype", "cell", "immunecell", "population")
+  cell_type_index <- match(cell_type_candidates, normalized_names, nomatch = 0L)
+  cell_type_index <- cell_type_index[cell_type_index > 0L]
+  cell_type_index <- if (length(cell_type_index)) cell_type_index[[1]] else 1L
+
+  cell_types <- trimws(as.character(result_data[[cell_type_index]]))
+  sample_indices <- setdiff(seq_len(ncol(result_data)), cell_type_index)
+  sample_values <- lapply(
+    result_data[sample_indices],
+    function(values) suppressWarnings(as.numeric(as.character(values)))
+  )
+  usable_samples <- vapply(
+    sample_values,
+    function(values) any(is.finite(values)),
+    logical(1)
+  )
+  sample_values <- sample_values[usable_samples]
+
+  valid_cell_types <- !is.na(cell_types) & nzchar(cell_types)
+  if (!length(sample_values) || !any(valid_cell_types)) {
+    return(remove_stale_plot())
+  }
+
+  abundance_matrix <- do.call(cbind, sample_values)
+  abundance_matrix <- abundance_matrix[valid_cell_types, , drop = FALSE]
+  rownames(abundance_matrix) <- make.unique(cell_types[valid_cell_types])
+  abundance_matrix[!is.finite(abundance_matrix)] <- NA_real_
+
+  cell_scores <- rowMeans(abs(abundance_matrix), na.rm = TRUE)
+  cell_scores[!is.finite(cell_scores)] <- 0
+  selected_cells <- names(sort(cell_scores, decreasing = TRUE))[
+    seq_len(min(as.integer(max_cell_types), length(cell_scores)))
+  ]
+  abundance_matrix <- abundance_matrix[selected_cells, , drop = FALSE]
+
+  sample_scores <- apply(abundance_matrix, 2, stats::var, na.rm = TRUE)
+  sample_scores[!is.finite(sample_scores)] <- 0
+  selected_samples <- names(sort(sample_scores, decreasing = TRUE))[
+    seq_len(min(as.integer(max_samples), length(sample_scores)))
+  ]
+  abundance_matrix <- abundance_matrix[, selected_samples, drop = FALSE]
+
+  plot_data <- data.frame(
+    Cell_Type = rep(rownames(abundance_matrix), times = ncol(abundance_matrix)),
+    Sample = rep(colnames(abundance_matrix), each = nrow(abundance_matrix)),
+    Abundance = as.vector(abundance_matrix),
+    stringsAsFactors = FALSE
+  )
+  plot_data <- plot_data[is.finite(plot_data$Abundance), , drop = FALSE]
+  if (!nrow(plot_data)) return(remove_stale_plot())
+
+  plot_data$Cell_Type <- factor(
+    plot_data$Cell_Type,
+    levels = rev(rownames(abundance_matrix))
+  )
+  plot_data$Sample <- factor(
+    plot_data$Sample,
+    levels = colnames(abundance_matrix)
+  )
+
+  graph <- ggplot2::ggplot(
+    plot_data,
+    ggplot2::aes(x = Sample, y = Cell_Type, fill = Abundance)
+  ) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.25) +
+    ggplot2::scale_fill_gradientn(
+      colours = c("#071a2c", "#176b87", "#55c9c1", "#f4d35e"),
+      name = "Estimated\nabundance"
+    ) +
+    ggplot2::labs(
+      title = "Immune Cell Composition",
+      subtitle = "Estimated cell populations across expression samples",
+      x = "Sample",
+      y = NULL
+    ) +
+    ggplot2::theme_classic(base_size = 11) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold"),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      axis.ticks = ggplot2::element_blank()
+    )
+
+  ggplot2::ggsave(
+    filename = output_file,
+    plot = graph,
+    width = max(9, min(16, 5 + 0.22 * ncol(abundance_matrix))),
+    height = max(6, min(13, 3 + 0.30 * nrow(abundance_matrix))),
+    dpi = 300,
+    bg = "white"
+  )
+
+  file.exists(output_file)
+}
+
+
+save_drug_sensitivity_plot <- function(
+  ranking,
+  output_file,
+  lower_is_sensitive = NA,
+  max_compounds = 20L
+) {
+  remove_stale_plot <- function() {
+    if (file.exists(output_file)) unlink(output_file)
+    FALSE
+  }
+
+  ranking <- as.data.frame(ranking, stringsAsFactors = FALSE)
+  required_columns <- c("Compound", "Mean_Response")
+  if (!nrow(ranking) || !all(required_columns %in% names(ranking))) {
+    return(remove_stale_plot())
+  }
+
+  ranking$Compound <- trimws(as.character(ranking$Compound))
+  ranking$Mean_Response <- suppressWarnings(as.numeric(ranking$Mean_Response))
+  valid <- nzchar(ranking$Compound) & is.finite(ranking$Mean_Response)
+  ranking <- ranking[valid, , drop = FALSE]
+  if (!nrow(ranking)) return(remove_stale_plot())
+
+  if ("Rank" %in% names(ranking)) {
+    ranking$Rank <- suppressWarnings(as.numeric(ranking$Rank))
+    ranking <- ranking[order(ranking$Rank, na.last = TRUE), , drop = FALSE]
+  } else {
+    ranking <- ranking[order(ranking$Mean_Response), , drop = FALSE]
+  }
+  ranking <- utils::head(ranking, as.integer(max_compounds))
+
+  plot_compound_names <- sub(
+    "[[:space:]]*\\(BRD:.*\\)$",
+    "",
+    ranking$Compound
+  )
+  display_labels <- vapply(
+    plot_compound_names,
+    function(label) paste(strwrap(label, width = 46), collapse = "\n"),
+    character(1)
+  )
+  ranking$Display_Compound <- factor(
+    make.unique(display_labels),
+    levels = rev(make.unique(display_labels))
+  )
+
+  direction_note <- if (isTRUE(lower_is_sensitive)) {
+    "Lower source-metric values rank as more sensitive"
+  } else if (identical(lower_is_sensitive, FALSE)) {
+    "Higher source-metric values rank as more sensitive"
+  } else {
+    "Ranked assay response; interpret direction using the source metric"
+  }
+
+  graph <- ggplot2::ggplot(
+    ranking,
+    ggplot2::aes(x = Mean_Response, y = Display_Compound)
+  ) +
+    ggplot2::geom_col(width = 0.68, fill = "#2a9fba") +
+    ggplot2::geom_vline(xintercept = 0, color = "#6b7f91", linewidth = 0.4) +
+    ggplot2::labs(
+      title = "Top Ranked Drug Responses",
+      subtitle = direction_note,
+      x = "Mean assay response",
+      y = NULL
+    ) +
+    ggplot2::theme_classic(base_size = 11) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold"),
+      axis.text.y = ggplot2::element_text(size = 8)
+    )
+
+  ggplot2::ggsave(
+    filename = output_file,
+    plot = graph,
+    width = 10,
+    height = 7.5,
+    dpi = 300,
+    bg = "white"
+  )
+
+  file.exists(output_file)
+}
+
+
 # ------------------------------------------------------------
 # Individual real agents
 # ------------------------------------------------------------
@@ -1552,11 +1749,13 @@ execute_immune_agent <- function(data) {
   result <- run_immune_agent(expression_matrix = expression_matrix)
   result_table <- result$results
   csv_file <- file.path(output_directory, "immune_cell_composition.csv")
+  plot_file <- file.path(output_directory, "immune_composition_heatmap.png")
   readr::write_csv(result_table, csv_file)
+  save_immune_composition_plot(result_table, plot_file)
 
   list(
     success = TRUE, agent = "immune", result = result,
-    csv = csv_file, plot = NA_character_, rows = nrow(result_table),
+    csv = csv_file, plot = plot_file, rows = nrow(result_table),
     message = result$summary
   )
 }
@@ -1576,8 +1775,10 @@ execute_drug_agent <- function(data) {
     output_directory <- file.path(real_agent_project_root, "output", "drug")
     dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
     csv_file <- file.path(output_directory, "drug_sensitivity_results.csv")
+    plot_file <- file.path(output_directory, "drug_response_ranking.png")
     readr::write_csv(ranking, csv_file)
-    return(list(success = TRUE, agent = "drug", result = list(results = ranking), csv = csv_file, plot = NA_character_, rows = nrow(ranking), message = paste("Drug Sensitivity ranked", nrow(ranking), "PRISM compounds.")))
+    save_drug_sensitivity_plot(ranking, plot_file, lower_is_sensitive = NA)
+    return(list(success = TRUE, agent = "drug", result = list(results = ranking), csv = csv_file, plot = plot_file, rows = nrow(ranking), message = paste("Drug Sensitivity ranked", nrow(ranking), "PRISM compounds.")))
   }
   compound_candidates <- c("compound", "compoundname", "drug", "drugname", "treatment")
   response_candidates <- c("ic50", "auc", "viability", "sensitivity", "response", "lnic50")
@@ -1622,7 +1823,13 @@ execute_drug_agent <- function(data) {
   output_directory <- file.path(real_agent_project_root, "output", "drug")
   dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
   csv_file <- file.path(output_directory, "drug_sensitivity_results.csv")
+  plot_file <- file.path(output_directory, "drug_response_ranking.png")
   readr::write_csv(ranking, csv_file)
+  save_drug_sensitivity_plot(
+    ranking,
+    plot_file,
+    lower_is_sensitive = lower_is_sensitive
+  )
 
   list(
     success = TRUE, agent = "drug",
@@ -1630,7 +1837,7 @@ execute_drug_agent <- function(data) {
       agent_name = "Drug Sensitivity", results = ranking,
       response_column = response_column, lower_is_sensitive = lower_is_sensitive
     ),
-    csv = csv_file, plot = NA_character_, rows = nrow(ranking),
+    csv = csv_file, plot = plot_file, rows = nrow(ranking),
     message = paste("Drug Sensitivity ranked", nrow(ranking), "compounds using", response_column, "measurements.")
   )
 }

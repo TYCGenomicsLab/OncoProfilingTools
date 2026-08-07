@@ -66,11 +66,11 @@ result_files <- list(
   hallmark = list(csv = file.path(analysis_output_root, "hallmark", "hallmark_results.csv"), plot = file.path(analysis_output_root, "hallmark", "hallmark_pathways.png")),
   immune = list(
     csv = file.path(analysis_output_root, "immune", "immune_cell_composition.csv"),
-    plot = NA_character_
+    plot = file.path(analysis_output_root, "immune", "immune_composition_heatmap.png")
   ),
   drug = list(
     csv = file.path(analysis_output_root, "drug", "drug_sensitivity_results.csv"),
-    plot = NA_character_
+    plot = file.path(analysis_output_root, "drug", "drug_response_ranking.png")
   )
 )
 

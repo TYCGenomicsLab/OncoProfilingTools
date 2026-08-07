@@ -95,3 +95,42 @@ testthat::test_that("STRING creates a visualization from network results", {
   testthat::expect_true(save_string_network_plot(result, plot_file))
   testthat::expect_true(file.info(plot_file)$size > 1000)
 })
+
+testthat::test_that("Immune Deconvolution creates a composition heatmap", {
+  testthat::skip_if_not_installed("ggplot2")
+  plot_file <- tempfile(fileext = ".png")
+  on.exit(unlink(plot_file), add = TRUE)
+
+  result_data <- data.frame(
+    cell_type = c("B cell", "CD8 T cell", "Macrophage", "NK cell"),
+    Tumor_A = c(0.12, 0.31, 0.40, 0.17),
+    Tumor_B = c(0.20, 0.24, 0.33, 0.23),
+    Tumor_C = c(0.08, 0.42, 0.28, 0.22),
+    check.names = FALSE
+  )
+
+  testthat::expect_true(save_immune_composition_plot(result_data, plot_file))
+  testthat::expect_true(file.info(plot_file)$size > 1000)
+})
+
+testthat::test_that("Drug Sensitivity creates a ranked response plot", {
+  testthat::skip_if_not_installed("ggplot2")
+  plot_file <- tempfile(fileext = ".png")
+  on.exit(unlink(plot_file), add = TRUE)
+
+  ranking <- data.frame(
+    Rank = 1:8,
+    Compound = paste("Compound", LETTERS[1:8]),
+    Mean_Response = c(0.12, 0.18, 0.24, 0.29, 0.34, 0.41, 0.47, 0.55),
+    Measurements = rep(24L, 8)
+  )
+
+  testthat::expect_true(
+    save_drug_sensitivity_plot(
+      ranking,
+      plot_file,
+      lower_is_sensitive = TRUE
+    )
+  )
+  testthat::expect_true(file.info(plot_file)$size > 1000)
+})

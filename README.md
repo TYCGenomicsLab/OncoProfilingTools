@@ -18,8 +18,8 @@ The Results Center combines deterministic R analyses with optional biological in
 | Hallmark | `msigdbr` Hallmark collection plus `clusterProfiler::enricher` | Gene list | `output/hallmark/hallmark_results.csv` | `output/hallmark/hallmark_pathways.png` |
 | ChEA | `enrichR` database `ChEA_2022` | Gene list | `output/chea_cms4/chea_results.csv` | `output/chea_cms4/chea_tf_dotplot.png` |
 | GSVA | `GSVA` over the MSigDB Hallmark collection; Gaussian kernel | Expression matrix | `output/gsva_bowel/gsva_hallmark_scores.csv` | `output/gsva_bowel/gsva_hallmark_heatmap.png` |
-| Immune Deconvolution | `immunedeconv::deconvolute`, default method `quantiseq` | Expression matrix | `output/immune/immune_cell_composition.csv` | Not generated |
-| Drug Sensitivity | In-process ranking of long-form response tables or wide PRISM-style tables | Drug-response table | `output/drug/drug_sensitivity_results.csv` | Not generated |
+| Immune Deconvolution | `immunedeconv::deconvolute`, default method `quantiseq` | Expression matrix | `output/immune/immune_cell_composition.csv` | `output/immune/immune_composition_heatmap.png` |
+| Drug Sensitivity | In-process ranking of long-form response tables or wide PRISM-style tables | Drug-response table | `output/drug/drug_sensitivity_results.csv` | `output/drug/drug_response_ranking.png` |
 
 The package-level `R/agent-wikipathways.R` uses the MSigDB WikiPathways collection. The active Shiny executor reads the current official human WikiPathways GMT, prefers an uploaded Entrez-ID column, and otherwise maps HGNC symbols through the installed `org.Hs.eg.db` SQLite database without loading the full annotation stack.
 

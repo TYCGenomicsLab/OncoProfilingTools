@@ -6,6 +6,11 @@ testthat::test_that("every result file has a correct title and description", {
   testthat::expect_identical(agent_titles[["drug"]], "Drug Sensitivity")
   testthat::expect_identical(basename(result_files$string$plot), "string_network.png")
   testthat::expect_identical(basename(result_files$string$interactions), "string_interactions.csv")
+  testthat::expect_identical(basename(result_files$immune$plot), "immune_composition_heatmap.png")
+  testthat::expect_identical(basename(result_files$drug$plot), "drug_response_ranking.png")
+  testthat::expect_true(all(vapply(result_files, function(files) {
+    length(files$plot) == 1L && !is.na(files$plot) && nzchar(files$plot)
+  }, logical(1))))
 })
 
 testthat::test_that("individual HTML reports use the correct agent title", {
