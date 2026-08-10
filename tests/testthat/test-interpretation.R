@@ -142,5 +142,9 @@ testthat::test_that("valid local Ollama JSON is parsed without HTML execution", 
 
   testthat::expect_identical(bundle$source, "ollama")
   testthat::expect_identical(bundle$model, "test-model")
+  testthat::expect_identical(
+    bundle$source_label,
+    "Biological interpretation generated locally with test-model"
+  )
   testthat::expect_identical(bundle$agents$go$summary, "Local summary")
 })

@@ -397,8 +397,7 @@ build_combined_html_report <- function(
   synthesis <- interpretation_bundle$synthesis
   synthesis_html <- paste0(
     "<section><h2>Cross-agent synthesis</h2><p class='source'>",
-    html_escape_value(interpretation_bundle$source_label),
-    if (!is.null(interpretation_bundle$model)) paste0(" · ", html_escape_value(interpretation_bundle$model)) else "",
+    html_escape_value(interpretation_display_label(interpretation_bundle)),
     "</p><p>", html_escape_value(synthesis$summary %or_else% "Synthesis is not available."), "</p>",
     "<h3>Drug–pathway exchange</h3><p>",
     html_escape_value(synthesis$drug_pathway_context %or_else% "No Drug–pathway context is available."),
@@ -641,18 +640,74 @@ results_center_ui <- function(selected_agents = names(agent_titles)) {
 }
 
 
-interpretation_source_ui <- function(bundle) {
-  source_badge <- switch(
+ollama_model_display <- function(model) {
+  model <- trimws(as.character(model %or_else% ""))
+  if (length(model) && nzchar(model[[1L]])) model[[1L]] else "the selected model"
+}
+
+interpretation_display_label <- function(bundle) {
+  model <- ollama_model_display(bundle$model)
+  switch(
     bundle$source,
-    ollama = "LOCAL AI",
-    pending = "GENERATING",
+    loading = paste0("Loading ", model, " locally…"),
+    generating = paste0("Analyzing full result table with ", model, "…"),
+    pending = paste0("Analyzing full result table with ", model, "…"),
+    ollama = paste("Biological interpretation generated locally with", model),
+    bundle$source_label %or_else% "Rule-based fallback"
+  )
+}
+
+interpretation_source_badge <- function(bundle) {
+  switch(
+    bundle$source,
+    loading = "OLLAMA LOADING",
+    generating = "OLLAMA GENERATING",
+    pending = "OLLAMA GENERATING",
+    ollama = "OLLAMA COMPLETE",
     "SAFE FALLBACK"
   )
+}
+
+interpretation_status_label <- function(bundle) {
+  switch(
+    bundle$source,
+    loading = "OLLAMA LOADING",
+    generating = "OLLAMA GENERATING",
+    pending = "OLLAMA GENERATING",
+    ollama = "OLLAMA COMPLETE",
+    "Rule summary active"
+  )
+}
+
+build_ollama_progress_bundle <- function(exchanges, state, model) {
+  stopifnot(state %in% c("loading", "generating"))
+  reason <- switch(
+    state,
+    loading = paste(
+      "Ollama is starting locally.",
+      "Scientific results and downloads remain available."
+    ),
+    generating = paste(
+      "Ollama is generating a private, result-wide interpretation locally.",
+      "Scientific results and downloads remain available."
+    )
+  )
+  bundle <- build_rule_interpretation_bundle(exchanges, reason)
+  bundle$source <- state
+  bundle$model <- ollama_model_display(model)
+  bundle$source_label <- interpretation_display_label(bundle)
+  bundle
+}
+
+interpretation_source_ui <- function(bundle) {
+  local_model <- bundle$source %in% c("loading", "generating", "pending", "ollama")
   div(
     class = paste("interpretation-source", paste0("interpretation-source-", bundle$source)),
-    span(source_badge),
-    strong(bundle$source_label),
-    if (!is.null(bundle$model)) tags$small(bundle$model),
+    span(interpretation_source_badge(bundle)),
+    strong(interpretation_display_label(bundle)),
+    if (!is.null(bundle$model)) {
+      tags$small(if (local_model) paste(bundle$model, "· Running locally") else bundle$model)
+    },
     p(bundle$reason)
   )
 }
@@ -921,14 +976,12 @@ register_results_server <- function(
       return()
     }
 
-    pending <- build_rule_interpretation_bundle(
+    loading <- build_ollama_progress_bundle(
       exchanges,
-      "The local model is generating a private result-wide interpretation in the background. Scientific results and downloads remain available."
+      state = "loading",
+      model = settings$model
     )
-    pending$source <- "pending"
-    pending$source_label <- "Local interpretation in progress"
-    pending$model <- settings$model
-    publish_interpretation(pending, cache_key)
+    publish_interpretation(loading, cache_key)
 
     interpretation_job$value <- tryCatch(
       {
@@ -944,11 +997,26 @@ register_results_server <- function(
     )
   })
 
-  shiny::observe({
-    shiny::invalidateLater(500, session)
+  finalize_interpretation_job <- function() {
     job <- interpretation_job$value
-    if (is.null(job)) return()
-    if (isTRUE(tryCatch(job$process$is_alive(), error = function(error) FALSE))) return()
+    if (is.null(job)) return(invisible(FALSE))
+
+    is_alive <- isTRUE(tryCatch(job$process$is_alive(), error = function(error) FALSE))
+    if (is_alive) {
+      current <- interpretation_cache$value
+      if (
+        identical(job$key, interpretation_cache$key) &&
+        identical(current$source, "loading")
+      ) {
+        generating <- build_ollama_progress_bundle(
+          current$exchanges %or_else% list(),
+          state = "generating",
+          model = current$model
+        )
+        publish_interpretation(generating, job$key)
+      }
+      return(invisible(FALSE))
+    }
 
     bundle <- if (file.exists(job$output_path)) {
       tryCatch(readRDS(job$output_path), error = function(error) NULL)
@@ -971,6 +1039,12 @@ register_results_server <- function(
     if (identical(completed_key, interpretation_cache$key)) {
       publish_interpretation(bundle, completed_key)
     }
+    invisible(TRUE)
+  }
+
+  shiny::observe({
+    shiny::invalidateLater(500, session)
+    finalize_interpretation_job()
   })
 
   session$onSessionEnded(function() {
@@ -995,12 +1069,7 @@ register_results_server <- function(
     nonempty <- sum(summary_data$Rows > 0L)
     empty <- max(0L, completed - nonempty)
     bundle <- interpretation_bundle()
-    interpretation_status <- switch(
-      bundle$source,
-      ollama = "Local AI ready",
-      pending = "Local AI generating",
-      "Rule summary active"
-    )
+    interpretation_status <- interpretation_status_label(bundle)
 
     div(
       class = paste(
@@ -1038,7 +1107,9 @@ register_results_server <- function(
       paste0("OncoProfiling_Combined_Report_", format(Sys.Date(), "%Y%m%d"), ".html")
     },
     content = function(file) {
-      build_combined_html_report(file, interpretation_bundle(), active_keys())
+      finalize_interpretation_job()
+      current <- interpretation_cache$value %or_else% interpretation_bundle()
+      build_combined_html_report(file, current, active_keys())
     },
     contentType = "text/html"
   )
@@ -1048,7 +1119,9 @@ register_results_server <- function(
       paste0("OncoProfiling_All_Results_", format(Sys.Date(), "%Y%m%d"), ".zip")
     },
     content = function(file) {
-      create_results_bundle(file, interpretation_bundle(), active_keys())
+      finalize_interpretation_job()
+      current <- interpretation_cache$value %or_else% interpretation_bundle()
+      create_results_bundle(file, current, active_keys())
     },
     contentType = "application/zip"
   )
@@ -1236,7 +1309,9 @@ register_results_server <- function(
           paste0("OncoProfiling_", toupper(key), "_Report_", format(Sys.Date(), "%Y%m%d"), ".html")
         },
         content = function(file) {
-          build_agent_html_report(file, key, interpretation_bundle())
+          finalize_interpretation_job()
+          current <- interpretation_cache$value %or_else% interpretation_bundle()
+          build_agent_html_report(file, key, current)
         },
         contentType = "text/html"
       )

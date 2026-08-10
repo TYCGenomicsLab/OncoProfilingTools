@@ -979,6 +979,41 @@ as_text_vector <- function(value, fallback = character()) {
   clean_exchange_text(unlist(value, recursive = TRUE, use.names = FALSE), limit = 600L)
 }
 
+
+sanitize_limitations <- function(value, fallback = character()) {
+  cleaned <- as_text_vector(value, fallback)
+
+  if (!length(cleaned)) {
+    return(fallback)
+  }
+
+  unsafe <- grepl(
+    paste(
+      "small number of result",
+      "few result",
+      "limited number of result",
+      "row_count.*(reliab|power|confidence|adequ|strength)",
+      "(reliab|power|confidence|adequ|strength).*row_count",
+      "sample size",
+      "cohort size",
+      "patient count",
+      "subject count",
+      sep = "|"
+    ),
+    cleaned,
+    ignore.case = TRUE,
+    perl = TRUE
+  )
+
+  cleaned <- cleaned[!unsafe]
+
+  if (!length(cleaned)) {
+    return(fallback)
+  }
+
+  utils::head(cleaned, 3L)
+}
+
 parse_ollama_interpretation <- function(
   response_text,
   exchanges,
@@ -1035,7 +1070,7 @@ parse_ollama_interpretation <- function(
       candidate$cancer_relevance
     )
 
-    safe_limitations <- as_text_vector(
+    safe_limitations <- sanitize_limitations(
       candidate$limitations,
       fallback$agents[[agent_id]]$limitations
     )
@@ -1096,7 +1131,7 @@ parse_ollama_interpretation <- function(
     }
 
     synthesis$limitations <-
-      as_text_vector(
+      sanitize_limitations(
         synthesis_candidate$limitations,
         synthesis$limitations
       )
@@ -1113,7 +1148,10 @@ parse_ollama_interpretation <- function(
 
   list(
     source = "ollama",
-    source_label = "Local Ollama",
+    source_label = paste(
+      "Biological interpretation generated locally with",
+      settings$model
+    ),
     model = settings$model,
     reason =
       "Generated locally from structured, row-grounded result digests.",

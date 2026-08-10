@@ -354,6 +354,8 @@ body {
 .analysis-completion-banner p { margin: 2px 0 0; color: var(--muted); font-size: 9px; }
 .interpretation-status-chip { margin-left: auto; padding: 5px 8px; border-radius: 999px; font-size: 8px; font-weight: 800; white-space: nowrap; }
 .interpretation-status-ollama { color: var(--teal); background: var(--teal-soft); }
+.interpretation-status-loading,
+.interpretation-status-generating,
 .interpretation-status-pending { color: var(--cyan); background: var(--cyan-soft); }
 .interpretation-status-rule { color: var(--amber); background: var(--amber-soft); }
 
@@ -406,6 +408,8 @@ body {
 .interpretation-source > small { color: var(--cyan); font-size: 8px; }
 .interpretation-source > p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 8px; }
 .interpretation-source-rule > span { color: var(--amber); background: var(--amber-soft); }
+.interpretation-source-loading > span,
+.interpretation-source-generating > span,
 .interpretation-source-pending > span { color: var(--cyan); background: var(--cyan-soft); animation: pulse 1.2s infinite; }
 .interpretation-section { padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .interpretation-section:last-child { border-bottom: 0; }

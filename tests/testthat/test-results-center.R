@@ -87,3 +87,60 @@ testthat::test_that("combined report covers all selected agents", {
   testthat::expect_match(report, "Drug Sensitivity Analysis", fixed = TRUE)
   testthat::expect_match(report, "Cross-agent synthesis", fixed = TRUE)
 })
+
+testthat::test_that("Ollama loading, generating, and completion copy is explicit", {
+  exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  loading <- build_ollama_progress_bundle(exchanges, "loading", "llama3.1:8b")
+  generating <- build_ollama_progress_bundle(exchanges, "generating", "llama3.1:8b")
+  completed <- generating
+  completed$source <- "ollama"
+
+  testthat::expect_identical(interpretation_source_badge(loading), "OLLAMA LOADING")
+  testthat::expect_identical(
+    interpretation_display_label(loading),
+    "Loading llama3.1:8b locally…"
+  )
+  testthat::expect_identical(interpretation_source_badge(generating), "OLLAMA GENERATING")
+  testthat::expect_identical(
+    interpretation_display_label(generating),
+    "Analyzing full result table with llama3.1:8b…"
+  )
+  testthat::expect_identical(interpretation_source_badge(completed), "OLLAMA COMPLETE")
+  testthat::expect_identical(
+    interpretation_display_label(completed),
+    "Biological interpretation generated locally with llama3.1:8b"
+  )
+  testthat::expect_identical(interpretation_status_label(loading), "OLLAMA LOADING")
+  testthat::expect_identical(interpretation_status_label(generating), "OLLAMA GENERATING")
+  testthat::expect_identical(interpretation_status_label(completed), "OLLAMA COMPLETE")
+
+  fallback <- build_rule_interpretation_bundle(exchanges)
+  testthat::expect_identical(interpretation_source_badge(fallback), "SAFE FALLBACK")
+  testthat::expect_identical(interpretation_status_label(fallback), "Rule summary active")
+})
+
+testthat::test_that("completed Ollama reports never retain stale progress wording", {
+  report_file <- tempfile(fileext = ".html")
+  on.exit(unlink(report_file), add = TRUE)
+  bundle <- generate_interpretation_bundle(
+    list(go = data.frame()),
+    list(enabled = FALSE)
+  )
+  bundle$source <- "ollama"
+  bundle$source_label <- "Local interpretation in progress"
+  bundle$model <- "llama3.1:8b"
+
+  build_combined_html_report(
+    report_file,
+    interpretation_bundle = bundle,
+    selected_agents = "go"
+  )
+  report <- paste(readLines(report_file, warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(
+    report,
+    "Biological interpretation generated locally with llama3.1:8b",
+    fixed = TRUE
+  )
+  testthat::expect_false(grepl("Local interpretation in progress", report, fixed = TRUE))
+})
