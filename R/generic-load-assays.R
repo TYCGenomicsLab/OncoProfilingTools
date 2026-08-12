@@ -8,7 +8,7 @@ library(methods)
 #' before being added to the OncoExperiment object.
 #'
 #' @param object An OncoExperiment object to which the assay will be added.
-#' @param assay_type A character string specifying the type of assay being loaded. View availale assay types by printing `AssayTypes`.
+#' @param assay_type A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.
 #' @param data A character string specifying specific file path where the assay data is located.
 #' @param metadata A character string specifying the path to the metadata file. This is optional but highly recommended.
 #' @return An updated OncoExperiment with loaded assays in the @assays slot.

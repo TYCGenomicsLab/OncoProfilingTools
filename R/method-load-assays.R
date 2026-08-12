@@ -5,20 +5,15 @@ library(methods)
 
 #' Load assay data into an OncoExperiment object
 #'
-#' Loads one or more supported assay files into an `OncoExperiment`.
-#'
-#' The assay type determines which registered loader is used. Each loader returns
-#' an assay object, such as an `ExpressionAssay`, which is then added to the
-#' `OncoExperiment`.
+#' @description This function loads and parses the specified data and metadata files and appends to the @assays 
+#' slot of the `OncoExperiment` object. You can view available assay types by printing `AssayTypes`.
 #'
 #' @param object An `OncoExperiment` object to which the assay will be added.
-#' @param assay_type A character vector specifying the assay type(s) being loaded,
-#'   such as `"Expression"` or `"PRISM"`.
-#' @param path A character string specifying the directory or specific file path
-#'   where the assay data is located.
+#' @param assay_type A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.
+#' @param data A character string specifying the path to the data file. This is required.
+#' @param metadata A character string specifying the path to the metadata file. This is optional but highly recommended.
 #' @param overwrite A logical value indicating whether to overwrite an existing
 #'   assay with the same name.
-#' @param ... Additional arguments passed to assay-specific loader functions.
 #'
 #' @return The updated `OncoExperiment` object.
 #'
@@ -30,7 +25,8 @@ methods::setMethod(
   definition = function(
     object,
     assay_type = NULL,
-    path = ".cache",
+    data = NULL,
+    metadata = NULL,
     overwrite = FALSE,
     ...
   ) {
@@ -56,12 +52,18 @@ methods::setMethod(
 
     assay_type <- unique(assay_type)
 
-    if (is.null(path)) {
+    if (is.null(data)) {
       stop("Please specify a path to load the assay data from.", call. = FALSE)
     }
 
-    if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-      stop("`path` must be a single non-empty character string.", call. = FALSE)
+    if (!is.character(data) || length(data) != 1L || is.na(data) || !nzchar(data)) {
+      stop("`data` must be a single non-empty character string.", call. = FALSE)
+    }
+
+    if (!is.null(metadata)) {
+      if (!is.character(metadata) || length(metadata) != 1L || is.na(metadata) || !nzchar(metadata)) {
+        stop("`metadata` must be a single non-empty character string.", call. = FALSE)
+      }
     }
 
     if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
@@ -91,18 +93,18 @@ methods::setMethod(
     ## Resolve files to load based on assay type
     ## ---------------------------------------------------
 
-    if (!file.exists(path)) {
+    if (!file.exists(data)) {
       stop(
         sprintf(
-          "Specified path '%s' does not exist. Run `download_assays()` first or provide `path` manually.",
-          path
+          "Specified data file '%s' does not exist. Run `download_assays()` first or provide `data` manually.",
+          data
         ),
         call. = FALSE
       )
     }
 
     resolved_files <- .resolve_files_to_load(
-      path = path,
+      path = data,
       assay_type = assay_type
     )
 
