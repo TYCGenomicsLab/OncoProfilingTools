@@ -88,7 +88,7 @@ testthat::test_that("combined report covers all selected agents", {
   testthat::expect_match(report, "Cross-agent synthesis", fixed = TRUE)
 })
 
-testthat::test_that("Ollama loading, generating, and completion copy is explicit", {
+testthat::test_that("Ollama loading, generating, completion, and error copy is explicit", {
   exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
   loading <- build_ollama_progress_bundle(exchanges, "loading", "llama3.1:8b")
   generating <- build_ollama_progress_bundle(exchanges, "generating", "llama3.1:8b")
@@ -114,9 +114,82 @@ testthat::test_that("Ollama loading, generating, and completion copy is explicit
   testthat::expect_identical(interpretation_status_label(generating), "OLLAMA GENERATING")
   testthat::expect_identical(interpretation_status_label(completed), "OLLAMA COMPLETE")
 
+  timeout <- build_ollama_failure_bundle(
+    exchanges,
+    simpleError("request timed out"),
+    list(model = "llama3.1:8b")
+  )
+  unavailable <- build_ollama_failure_bundle(
+    exchanges,
+    simpleError("connection refused"),
+    list(model = "llama3.1:8b")
+  )
+  testthat::expect_identical(interpretation_source_badge(timeout), "OLLAMA TIMED OUT")
+  testthat::expect_identical(interpretation_status_label(timeout), "OLLAMA TIMED OUT")
+  testthat::expect_identical(interpretation_source_badge(unavailable), "OLLAMA UNAVAILABLE")
+  testthat::expect_identical(interpretation_status_label(unavailable), "OLLAMA UNAVAILABLE")
+
   fallback <- build_rule_interpretation_bundle(exchanges)
   testthat::expect_identical(interpretation_source_badge(fallback), "SAFE FALLBACK")
   testthat::expect_identical(interpretation_status_label(fallback), "Rule summary active")
+})
+
+testthat::test_that("completed interpretations persist only for the matching run", {
+  cache_file <- tempfile(fileext = ".rds")
+  on.exit(unlink(cache_file), add = TRUE)
+  exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  completed <- build_rule_interpretation_bundle(exchanges)
+  completed$source <- "ollama"
+  completed$model <- "test-model"
+
+  testthat::expect_true(persist_completed_interpretation("run-a", completed, cache_file))
+  restored <- read_completed_interpretation("run-a", cache_file)
+  testthat::expect_identical(restored$source, "ollama")
+  testthat::expect_identical(restored$model, "test-model")
+  testthat::expect_null(read_completed_interpretation("run-b", cache_file))
+
+  progress <- build_ollama_progress_bundle(exchanges, "generating", "test-model")
+  testthat::expect_false(persist_completed_interpretation("run-a", progress, cache_file))
+})
+
+testthat::test_that("the parent watchdog recognizes a hung interpretation worker", {
+  job <- list(deadline_at = Sys.time() - 1)
+  testthat::expect_true(local_interpretation_job_expired(job))
+  testthat::expect_false(local_interpretation_job_expired(list(deadline_at = Sys.time() + 60)))
+})
+
+testthat::test_that("a terminal worker output is accepted before process exit", {
+  output_file <- tempfile(fileext = ".rds")
+  on.exit(unlink(output_file), add = TRUE)
+  bundle <- build_rule_interpretation_bundle(
+    list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  )
+  bundle$source <- "ollama"
+  saveRDS(bundle, output_file)
+
+  restored <- read_local_interpretation_job_bundle(list(output_path = output_file))
+  testthat::expect_identical(restored$source, "ollama")
+})
+
+testthat::test_that("the background worker exits cleanly when Ollama is unavailable", {
+  testthat::skip_if_not_installed("processx")
+  job <- start_local_interpretation_job(
+    list(go = data.frame(Description = "DNA repair")),
+    normalise_ollama_settings(list(
+      enabled = TRUE,
+      host = "http://127.0.0.1:1",
+      model = "unavailable-test-model",
+      timeout_seconds = 1,
+      num_predict = 128
+    ))
+  )
+  on.exit(cleanup_local_interpretation_job(job, terminate = TRUE), add = TRUE)
+
+  job$process$wait(timeout = 10000)
+  testthat::expect_false(job$process$is_alive())
+  testthat::expect_true(file.exists(job$output_path))
+  bundle <- readRDS(job$output_path)
+  testthat::expect_identical(bundle$source, "ollama_unavailable")
 })
 
 testthat::test_that("completed Ollama reports never retain stale progress wording", {
@@ -143,4 +216,21 @@ testthat::test_that("completed Ollama reports never retain stale progress wordin
     fixed = TRUE
   )
   testthat::expect_false(grepl("Local interpretation in progress", report, fixed = TRUE))
+})
+
+testthat::test_that("reports exported during generation contain a terminal rule summary", {
+  report_file <- tempfile(fileext = ".html")
+  on.exit(unlink(report_file), add = TRUE)
+  exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  progress <- build_ollama_progress_bundle(exchanges, "generating", "llama3.1:8b")
+
+  build_combined_html_report(
+    report_file,
+    interpretation_bundle = progress,
+    selected_agents = "go"
+  )
+  report <- paste(readLines(report_file, warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(report, "Rule-based fallback", fixed = TRUE)
+  testthat::expect_false(grepl("OLLAMA GENERATING|Analyzing full result table|Local interpretation in progress", report))
 })

@@ -20,6 +20,25 @@ testthat::test_that("Ollama errors are safe and readable", {
   testthat::expect_match(friendly_ollama_error(timeout), "time limit", fixed = TRUE)
   testthat::expect_match(friendly_ollama_error(refused), "could not be reached", fixed = TRUE)
   testthat::expect_false(grepl("\\033|\\[33m|curl", friendly_ollama_error(timeout)))
+  testthat::expect_identical(ollama_failure_source(timeout), "ollama_timeout")
+  testthat::expect_identical(ollama_failure_source(refused), "ollama_unavailable")
+})
+
+testthat::test_that("failed Ollama requests enter a terminal error state", {
+  bundle <- generate_interpretation_bundle(
+    list(go = data.frame(Description = "DNA repair")),
+    settings = list(
+      enabled = TRUE,
+      host = "http://127.0.0.1:11434",
+      model = "test-model"
+    ),
+    request_fn = function(prompt, settings) stop("connection refused")
+  )
+
+  testthat::expect_identical(bundle$source, "ollama_unavailable")
+  testthat::expect_identical(bundle$model, "test-model")
+  testthat::expect_match(bundle$reason, "could not be reached", fixed = TRUE)
+  testthat::expect_match(bundle$agents$go$summary, "Across all 1 result rows", fixed = TRUE)
 })
 
 testthat::test_that("agent exchange summarizes the complete result set", {

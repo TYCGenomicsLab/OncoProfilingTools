@@ -254,7 +254,10 @@ server <- function(input, output, session) {
     # Remove every result file known to the Results Center. This prevents
     # plots, tables and downloadable reports from a previous dataset/run
     # from appearing in the current analysis.
-    paths <- unique(unlist(lapply(result_files, function(x) unname(unlist(x))), use.names = FALSE))
+    paths <- c(
+      unique(unlist(lapply(result_files, function(x) unname(unlist(x))), use.names = FALSE)),
+      completed_interpretation_cache_path
+    )
     paths <- paths[!is.na(paths) & nzchar(paths)]
     existing <- paths[file.exists(paths)]
     if (length(existing)) unlink(existing, recursive = TRUE, force = TRUE)

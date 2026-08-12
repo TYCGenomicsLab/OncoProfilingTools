@@ -198,6 +198,21 @@ friendly_ollama_error <- function(error) {
   "The local model did not return a valid interpretation. The complete scientific results remain available with the safe rule-based summary."
 }
 
+ollama_failure_source <- function(error) {
+  message <- strip_terminal_codes(conditionMessage(error))
+  if (grepl("timed? ?out|timeout was reached|time limit", message, ignore.case = TRUE)) {
+    return("ollama_timeout")
+  }
+  if (grepl(
+    "connection refused|couldn't connect|failed to connect|model.*not found|not found.*model",
+    message,
+    ignore.case = TRUE
+  )) {
+    return("ollama_unavailable")
+  }
+  "ollama_error"
+}
+
 clean_exchange_text <- function(values, limit = 160L) {
   values <- as.character(values)
   values[is.na(values)] <- ""
@@ -765,6 +780,28 @@ build_rule_interpretation_bundle <- function(exchanges, reason = "Rule-based int
   )
 }
 
+build_ollama_failure_bundle <- function(
+  exchanges,
+  error,
+  settings = NULL,
+  source = NULL,
+  reason = NULL
+) {
+  settings <- normalise_ollama_settings(settings)
+  source <- source %or_else% ollama_failure_source(error)
+  reason <- reason %or_else% friendly_ollama_error(error)
+  bundle <- build_rule_interpretation_bundle(exchanges, reason)
+  bundle$source <- source
+  bundle$source_label <- switch(
+    source,
+    ollama_timeout = "Local interpretation timed out; rule-based summary shown",
+    ollama_unavailable = "Local Ollama unavailable; rule-based summary shown",
+    "Local interpretation failed; rule-based summary shown"
+  )
+  bundle$model <- settings$model
+  bundle
+}
+
 build_ollama_prompt <- function(exchanges) {
 
   exchange_json <- jsonlite::toJSON(
@@ -1187,8 +1224,7 @@ generate_interpretation_bundle <- function(data_by_agent, settings = NULL, reque
       parse_ollama_interpretation(response_text, exchanges, settings, fallback)
     },
     error = function(error) {
-      fallback$reason <- friendly_ollama_error(error)
-      fallback
+      build_ollama_failure_bundle(exchanges, error, settings)
     }
   )
 }

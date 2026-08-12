@@ -5,6 +5,11 @@ project_root <- if (basename(getwd()) == "shiny-app") {
 }
 
 analysis_output_root <- file.path(project_root, "output")
+completed_interpretation_cache_path <- file.path(
+  analysis_output_root,
+  "interpretation",
+  "completed_interpretation.rds"
+)
 
 dir.create(
   analysis_output_root,
@@ -324,6 +329,7 @@ build_combined_html_report <- function(
       settings = list(enabled = FALSE)
     )
   }
+  interpretation_bundle <- interpretation_bundle_for_report(interpretation_bundle)
 
   summary_rows <- paste0(
     apply(summary_data, 1, function(row) {
@@ -653,6 +659,9 @@ interpretation_display_label <- function(bundle) {
     generating = paste0("Analyzing full result table with ", model, "…"),
     pending = paste0("Analyzing full result table with ", model, "…"),
     ollama = paste("Biological interpretation generated locally with", model),
+    ollama_timeout = "Local interpretation timed out; rule-based summary shown",
+    ollama_unavailable = "Local Ollama unavailable; rule-based summary shown",
+    ollama_error = "Local interpretation failed; rule-based summary shown",
     bundle$source_label %or_else% "Rule-based fallback"
   )
 }
@@ -664,6 +673,9 @@ interpretation_source_badge <- function(bundle) {
     generating = "OLLAMA GENERATING",
     pending = "OLLAMA GENERATING",
     ollama = "OLLAMA COMPLETE",
+    ollama_timeout = "OLLAMA TIMED OUT",
+    ollama_unavailable = "OLLAMA UNAVAILABLE",
+    ollama_error = "OLLAMA ERROR",
     "SAFE FALLBACK"
   )
 }
@@ -675,6 +687,9 @@ interpretation_status_label <- function(bundle) {
     generating = "OLLAMA GENERATING",
     pending = "OLLAMA GENERATING",
     ollama = "OLLAMA COMPLETE",
+    ollama_timeout = "OLLAMA TIMED OUT",
+    ollama_unavailable = "OLLAMA UNAVAILABLE",
+    ollama_error = "OLLAMA ERROR",
     "Rule summary active"
   )
 }
@@ -699,14 +714,90 @@ build_ollama_progress_bundle <- function(exchanges, state, model) {
   bundle
 }
 
+is_interpretation_progress_bundle <- function(bundle) {
+  is.list(bundle) && bundle$source %in% c("loading", "generating", "pending")
+}
+
+is_terminal_interpretation_bundle <- function(bundle) {
+  is.list(bundle) &&
+    !is_interpretation_progress_bundle(bundle) &&
+    is.list(bundle$agents) &&
+    is.list(bundle$synthesis)
+}
+
+persist_completed_interpretation <- function(
+  cache_key,
+  bundle,
+  path = completed_interpretation_cache_path
+) {
+  if (!is_terminal_interpretation_bundle(bundle)) return(invisible(FALSE))
+
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  temporary_path <- tempfile(
+    "completed-interpretation-",
+    tmpdir = dirname(path),
+    fileext = ".rds.tmp"
+  )
+  on.exit(if (file.exists(temporary_path)) unlink(temporary_path, force = TRUE), add = TRUE)
+
+  saveRDS(
+    list(version = 1L, cache_key = cache_key, bundle = bundle),
+    temporary_path
+  )
+  published <- file.rename(temporary_path, path)
+  if (!published) {
+    published <- file.copy(temporary_path, path, overwrite = TRUE)
+  }
+  invisible(isTRUE(published))
+}
+
+read_completed_interpretation <- function(
+  cache_key,
+  path = completed_interpretation_cache_path
+) {
+  if (!file.exists(path)) return(NULL)
+  cached <- tryCatch(readRDS(path), error = function(error) NULL)
+  if (
+    !is.list(cached) ||
+      !identical(cached$version, 1L) ||
+      !identical(cached$cache_key, cache_key) ||
+      !is_terminal_interpretation_bundle(cached$bundle)
+  ) {
+    return(NULL)
+  }
+  cached$bundle
+}
+
+interpretation_bundle_for_report <- function(bundle) {
+  if (!is_interpretation_progress_bundle(bundle)) return(bundle)
+  build_rule_interpretation_bundle(
+    bundle$exchanges %or_else% list(),
+    paste(
+      "The report uses the complete deterministic interpretation because",
+      "local generation had not reached a terminal state when it was exported."
+    )
+  )
+}
+
 interpretation_source_ui <- function(bundle) {
-  local_model <- bundle$source %in% c("loading", "generating", "pending", "ollama")
+  running <- bundle$source %in% c("loading", "generating", "pending")
+  local_model <- running || bundle$source %in% c(
+    "ollama",
+    "ollama_timeout",
+    "ollama_unavailable",
+    "ollama_error"
+  )
   div(
     class = paste("interpretation-source", paste0("interpretation-source-", bundle$source)),
     span(interpretation_source_badge(bundle)),
     strong(interpretation_display_label(bundle)),
     if (!is.null(bundle$model)) {
-      tags$small(if (local_model) paste(bundle$model, "· Running locally") else bundle$model)
+      tags$small(if (local_model) {
+        paste(
+          bundle$model,
+          if (running) "· Running locally" else if (identical(bundle$source, "ollama")) "· Generated locally" else "· Local attempt ended"
+        )
+      } else bundle$model)
     },
     p(bundle$reason)
   )
@@ -797,8 +888,14 @@ start_local_interpretation_job <- function(data_by_agent, settings) {
     stop("Background interpretation requires the processx package.", call. = FALSE)
   }
 
-  worker_path <- normalizePath("run_interpretation_worker.R", mustWork = TRUE)
-  helper_path <- normalizePath("interpretation.R", mustWork = TRUE)
+  worker_path <- normalizePath(
+    file.path(project_root, "shiny-app", "run_interpretation_worker.R"),
+    mustWork = TRUE
+  )
+  helper_path <- normalizePath(
+    file.path(project_root, "shiny-app", "interpretation.R"),
+    mustWork = TRUE
+  )
   input_path <- tempfile("oncoprofiling-interpretation-input-", fileext = ".rds")
   output_path <- tempfile("oncoprofiling-interpretation-output-", fileext = ".rds")
   stdout_path <- tempfile("oncoprofiling-interpretation-stdout-", fileext = ".log")
@@ -814,19 +911,40 @@ start_local_interpretation_job <- function(data_by_agent, settings) {
     cleanup_tree = TRUE
   )
 
+  started_at <- Sys.time()
+  watchdog_grace_seconds <- min(5, max(1, settings$timeout_seconds * 0.05))
+
   list(
     process = process,
     input_path = input_path,
     output_path = output_path,
     stdout_path = stdout_path,
-    stderr_path = stderr_path
+    stderr_path = stderr_path,
+    settings = settings,
+    started_at = started_at,
+    deadline_at = started_at + settings$timeout_seconds + watchdog_grace_seconds
   )
+}
+
+local_interpretation_job_expired <- function(job, now = Sys.time()) {
+  !is.null(job$deadline_at) && isTRUE(now >= job$deadline_at)
+}
+
+read_local_interpretation_job_bundle <- function(job) {
+  if (is.null(job$output_path) || !file.exists(job$output_path)) return(NULL)
+  bundle <- tryCatch(readRDS(job$output_path), error = function(error) NULL)
+  if (is_terminal_interpretation_bundle(bundle)) bundle else NULL
 }
 
 cleanup_local_interpretation_job <- function(job, terminate = FALSE) {
   if (is.null(job)) return(invisible(NULL))
   if (isTRUE(terminate) && !is.null(job$process)) {
-    try(if (isTRUE(job$process$is_alive())) job$process$kill_tree(), silent = TRUE)
+    try({
+      if (isTRUE(job$process$is_alive())) {
+        job$process$kill_tree()
+        job$process$wait(timeout = 1000)
+      }
+    }, silent = TRUE)
   }
   paths <- unlist(job[c("input_path", "output_path", "stdout_path", "stderr_path")], use.names = FALSE)
   paths <- paths[!is.na(paths) & nzchar(paths) & file.exists(paths)]
@@ -841,7 +959,9 @@ register_results_server <- function(
   session,
   active_agents = NULL,
   analysis_complete = NULL,
-  ollama_settings = NULL
+  ollama_settings = NULL,
+  interpretation_job_factory = start_local_interpretation_job,
+  interpretation_cache_path = completed_interpretation_cache_path
 ) {
 
   active_keys <- shiny::reactive({
@@ -956,6 +1076,12 @@ register_results_server <- function(
       return()
     }
 
+    persisted <- read_completed_interpretation(cache_key, interpretation_cache_path)
+    if (!is.null(persisted)) {
+      publish_interpretation(persisted, cache_key)
+      return()
+    }
+
     if (!isTRUE(settings$enabled)) {
       publish_interpretation(
         build_rule_interpretation_bundle(
@@ -985,12 +1111,13 @@ register_results_server <- function(
 
     interpretation_job$value <- tryCatch(
       {
-        job <- start_local_interpretation_job(data_by_agent, settings)
+        job <- interpretation_job_factory(data_by_agent, settings)
         job$key <- cache_key
         job
       },
       error = function(error) {
-        fallback <- build_rule_interpretation_bundle(exchanges, friendly_ollama_error(error))
+        fallback <- build_ollama_failure_bundle(exchanges, error, settings)
+        persist_completed_interpretation(cache_key, fallback, interpretation_cache_path)
         publish_interpretation(fallback, cache_key)
         NULL
       }
@@ -1002,8 +1129,37 @@ register_results_server <- function(
     if (is.null(job)) return(invisible(FALSE))
 
     is_alive <- isTRUE(tryCatch(job$process$is_alive(), error = function(error) FALSE))
+    bundle <- read_local_interpretation_job_bundle(job)
+    if (!is.null(bundle)) {
+      completed_key <- job$key
+      cleanup_local_interpretation_job(job, terminate = is_alive)
+      interpretation_job$value <- NULL
+      if (identical(completed_key, interpretation_cache$key)) {
+        persist_completed_interpretation(completed_key, bundle, interpretation_cache_path)
+        publish_interpretation(bundle, completed_key)
+      }
+      return(invisible(TRUE))
+    }
+
     if (is_alive) {
       current <- interpretation_cache$value
+      if (local_interpretation_job_expired(job)) {
+        timeout_error <- simpleError("Local interpretation timed out at the configured time limit.")
+        bundle <- build_ollama_failure_bundle(
+          current$exchanges %or_else% list(),
+          timeout_error,
+          job$settings,
+          source = "ollama_timeout"
+        )
+        completed_key <- job$key
+        cleanup_local_interpretation_job(job, terminate = TRUE)
+        interpretation_job$value <- NULL
+        if (identical(completed_key, interpretation_cache$key)) {
+          persist_completed_interpretation(completed_key, bundle, interpretation_cache_path)
+          publish_interpretation(bundle, completed_key)
+        }
+        return(invisible(TRUE))
+      }
       if (
         identical(job$key, interpretation_cache$key) &&
         identical(current$source, "loading")
@@ -1018,18 +1174,15 @@ register_results_server <- function(
       return(invisible(FALSE))
     }
 
-    bundle <- if (file.exists(job$output_path)) {
-      tryCatch(readRDS(job$output_path), error = function(error) NULL)
-    } else {
-      NULL
-    }
-
     if (is.null(bundle)) {
       current <- interpretation_cache$value
       exchanges <- current$exchanges %or_else% list()
-      bundle <- build_rule_interpretation_bundle(
+      bundle <- build_ollama_failure_bundle(
         exchanges,
-        "The background local-model process ended without a valid response. Scientific results remain available with the safe rule-based summary."
+        simpleError("The background local-model process ended without a valid response."),
+        job$settings,
+        source = "ollama_error",
+        reason = "The background local-model process ended without a valid response. Scientific results remain available with the safe rule-based summary."
       )
     }
 
@@ -1037,6 +1190,7 @@ register_results_server <- function(
     cleanup_local_interpretation_job(job)
     interpretation_job$value <- NULL
     if (identical(completed_key, interpretation_cache$key)) {
+      persist_completed_interpretation(completed_key, bundle, interpretation_cache_path)
       publish_interpretation(bundle, completed_key)
     }
     invisible(TRUE)

@@ -357,6 +357,9 @@ body {
 .interpretation-status-loading,
 .interpretation-status-generating,
 .interpretation-status-pending { color: var(--cyan); background: var(--cyan-soft); }
+.interpretation-status-ollama_timeout,
+.interpretation-status-ollama_unavailable,
+.interpretation-status-ollama_error { color: var(--danger); background: var(--danger-soft); }
 .interpretation-status-rule { color: var(--amber); background: var(--amber-soft); }
 
 .cross-agent-shell { margin-bottom: 19px; padding: 16px; background: linear-gradient(135deg, rgba(10, 36, 57, 0.95), rgba(13, 42, 62, 0.92)); border: 1px solid #315d79; border-radius: 14px; }
@@ -411,6 +414,9 @@ body {
 .interpretation-source-loading > span,
 .interpretation-source-generating > span,
 .interpretation-source-pending > span { color: var(--cyan); background: var(--cyan-soft); animation: pulse 1.2s infinite; }
+.interpretation-source-ollama_timeout > span,
+.interpretation-source-ollama_unavailable > span,
+.interpretation-source-ollama_error > span { color: var(--danger); background: var(--danger-soft); }
 .interpretation-section { padding: 12px 2px; border-bottom: 1px solid var(--line); }
 .interpretation-section:last-child { border-bottom: 0; }
 .interpretation-section h4 { margin: 0 0 6px; color: var(--cyan); font-size: 11px; }

@@ -63,7 +63,8 @@ The application:
 - uses file content fingerprints and inline image data to prevent stale plot reuse;
 - exposes searchable `DT` tables, available plots, per-module CSV and HTML report downloads, a combined HTML report action, and a ZIP bundle action (including the STRING edge list);
 - publishes concise full-table agent exchanges to one cross-agent synthesis layer;
-- kills active workers when the session ends; and
+- kills active scientific and local-interpretation workers when the session ends or their deadline expires;
+- persists terminal local-interpretation results by exact run signature and keeps transient progress wording out of static HTML reports; and
 - clears known result files and earlier runtime entries at app startup, on a new upload, and before a new run.
 
 ## Local interpretation and agent exchange

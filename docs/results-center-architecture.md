@@ -44,8 +44,10 @@ The exchange is intentionally concise so agents can share evidence without passi
 4. The app immediately publishes a deterministic full-result summary and starts a separate local R worker.
 5. The worker sends one structured JSON request to `/api/generate` on the configured Ollama host while the Shiny session remains responsive.
 6. The response is schema-checked and text is rendered as escaped UI content.
-7. Missing, invalid, disabled, or timed-out responses retain the deterministic rule bundle with a concise user-facing message; terminal control codes and raw curl diagnostics are not exposed.
-8. The bundle is cached by result signatures, model, host, timeout, response length, and run state.
+7. Missing, invalid, disabled, or timed-out responses retain the deterministic rule bundle with a terminal `OLLAMA UNAVAILABLE`, `OLLAMA TIMED OUT`, or `OLLAMA ERROR` state; terminal control codes and raw curl diagnostics are not exposed.
+8. A parent-process watchdog terminates a worker that outlives the configured request timeout, even if the HTTP client or Ollama process hangs.
+9. Terminal success and failure bundles are persisted atomically by result signature, model, host, timeout, response length, and run state. A matching completed bundle is restored instead of starting duplicate generation.
+10. Static HTML exports never embed a loading/generating state. If exported before Ollama finishes, they contain the complete deterministic interpretation; exports after completion use the persisted local interpretation.
 
 Only loopback URLs matching `localhost`, `127.0.0.1`, or `[::1]` are accepted. Result contents are marked as untrusted data in the prompt, and model output is never inserted as raw HTML.
 
