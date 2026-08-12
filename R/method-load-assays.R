@@ -96,7 +96,7 @@ methods::setMethod(
     if (!file.exists(data)) {
       stop(
         sprintf(
-          "Specified data file '%s' does not exist. Run `download_assays()` first or provide `data` manually.",
+          "Specified data file '%s' does not exist. Please check the file path and try again.",
           data
         ),
         call. = FALSE
@@ -111,25 +111,6 @@ methods::setMethod(
     if (!inherits(resolved_files, "data.frame") || nrow(resolved_files) == 0L) {
       stop(
         "No loadable assay files were resolved.",
-        call. = FALSE
-      )
-    }
-
-    ## ---------------------------------------------------
-    ## Guard against ambiguous duplicate assay types
-    ## ---------------------------------------------------
-
-    duplicated_assay_types <- resolved_files$assay_type[
-      duplicated(resolved_files$assay_type)
-    ]
-
-    if (length(duplicated_assay_types) > 0L) {
-      stop(
-        "Multiple loadable files matched the same assay type: ",
-        paste(unique(duplicated_assay_types), collapse = ", "),
-        "\nMatched files: ",
-        paste(resolved_files$filename, collapse = ", "),
-        "\nPlease provide a direct file path or use distinct assay types in the registry.",
         call. = FALSE
       )
     }

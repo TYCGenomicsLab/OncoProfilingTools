@@ -12,96 +12,23 @@ library(enumr)
 #'
 #' @keywords internal
 supported_assays <- tibble::tribble(
-  ~release_name_pattern,
   ~assay_type,
-  ~OncoAssay_class,
-  ~filename_pattern,
+  ~OncoAssay_ßclass,
   ~loader,
-  ~metadata_assay,
-
-  ## ---------------------------------------------------
-  ## DepMap Public 26Q1 metadata / auxiliary files
-  ## ---------------------------------------------------
-
-  "DepMap Public 26Q1",
-  NA,
-  NA,
-  "README.txt",
-  NA,
-  NA,
-  "DepMap Public 26Q1",
-  "ExpressionMetadata",
-  NA,
-  "Model.csv",
-  NA,
-  NA,
-
-  ## ---------------------------------------------------
-  ## DepMap expression assays
-  ## ---------------------------------------------------
-  "DepMap Public 26Q1",
-  "Expression",
-  "ExpressionAssay",
-  "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
-  "load_expression_assay",
-  "ExpressionMetadata",
-  "DepMap Public 26Q1",
-  "Protein Expression",
-  "ProteinExpressionAssay",
-  "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
-  "load_protein_expression_assay",
-  "ExpressionMetadata",
-
-  ## ---------------------------------------------------
-  ## DepMap mutation assays
-  ## ---------------------------------------------------
-
-  "DepMap Public 26Q1",
-  "Mutation",
-  "MutationAssay",
-  "OmicsSomaticMutations.csv",
-  "load_mutation_assay",
-  "ExpressionMetadata",
-
-  ## ---------------------------------------------------
-  ## PRISM metadata
-  ## ---------------------------------------------------
-
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Cell_Line_Meta_Data\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Treatment_Meta_Data\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Extended_Primary_Compound_List\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*README\\.txt$",
-  NA,
-  NA,
 
   ## ---------------------------------------------------
   ## PRISM response assay
   ## ---------------------------------------------------
-
-  "PRISM Primary Repurposing DepMap Public 24Q2",
   "PRISM",
   "DrugResponseAssay",
-  ".*_Extended_Primary_Data_Matrix\\.csv$",
   "load_drug_response_assay",
-  "DrugResponseAssayMetadata"
+
+  ## ---------------------------------------------------
+  ## RNA expression assay
+  ## ---------------------------------------------------
+  "RNA",
+  "RNAAssay",
+  "load_RNA_assay",
 )
 
 #' List supported assay types
