@@ -5,6 +5,8 @@ Version: 0.1.0
 Authors@R: person("Jason", "LaPierre",
     email = "lapierreja@vcu.edu",
     role = c("aut", "cre"))
+Author: Jason LaPierre [aut, cre]
+Maintainer: Jason LaPierre <lapierreja@vcu.edu>
 Description: Provides S4 classes and methods for managing and analyzing
     cancer genomic profiling data, with integration to the DepMap project
     for downloading and organizing oncology assays.
@@ -21,19 +23,51 @@ Imports:
     S4Vectors,
     SummarizedExperiment,
     MultiAssayExperiment,
-    SingleCellExperiment
+    SingleCellExperiment,
+    clusterProfiler,
+    org.Hs.eg.db,
+    ReactomePA,
+    STRINGdb,
+    immunedeconv,
+    msigdbr
 Remotes:
     ElianHugh/enumr@main
 Suggests:
+    jsonlite,
+    testthat (>= 3.0.0),
     roxygen2,
     knitr,
     rmarkdown,
     openxlsx,
     ggplot2,
-    ggrepel
+    ggrepel,
+    DBI,
+    RSQLite,
+    qvalue,
+    shiny,
+    readr,
+    DT,
+    processx,
+    htmltools,
+    base64enc,
+    enrichR,
+    GSVA,
+    pheatmap,
+    igraph
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
+Config/testthat/edition: 3
 Collate:
+    'agent-chea.R'
+    'agent-go.R'
+    'agent-gsva.R'
+    'agent-hallmark.R'
+    'agent-immune.R'
+    'agent-kegg.R'
+    'agent-reactome.R'
+    'agent-report.R'
+    'agent-string.R'
+    'agent-wikipathways.R'
     'class-DrugResponseAssay.R'
     'class-ExpressionAssay.R'
     'class-MutationAssay.R'
