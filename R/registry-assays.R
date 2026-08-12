@@ -145,21 +145,14 @@ get_supported_types <- function() {
 
 #' An enumeration of supported assay types
 #'
-#' Helpful for intelligent code completion and avoiding typos in assay type
-#' strings.
+#' Helpful for intelligent code completion and avoiding typos in assay types.
 #'
 #' @examples
-#' AssayTypes$Expression
-#' AssayTypes$ProteinExpression
+#' AssayTypes$RNA
 #' AssayTypes$PRISM
 #'
 #' @export
 AssayTypes <- enumr::enum( # nolint
-  ExpressionMetadata = "ExpressionMetadata",
-  Expression = "Expression",
-  ProteinExpression = "Protein Expression",
-  DrugResponseAssayMetadata = "DrugResponseAssayMetadata",
+  RNA = "RNA",
   PRISM = "PRISM",
-  Mutation = "Mutation",
-  MutationMetadata = "MutationMetadata"
 )
