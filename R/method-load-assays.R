@@ -5,7 +5,7 @@ library(methods)
 
 #' Load assay data into an OncoExperiment object
 #'
-#' @description This function loads and parses the specified data and metadata files and appends to the @assays 
+#' @description This function loads and parses the specified data and metadata files and appends to the @assays
 #' slot of the `OncoExperiment` object. You can view available assay types by printing `AssayTypes`.
 #'
 #' @param object An `OncoExperiment` object to which the assay will be added.
