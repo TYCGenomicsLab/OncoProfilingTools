@@ -7,7 +7,7 @@ library(data.table)
 #' Load a DepMap protein-coding gene expression assay
 #'
 #' Loads a DepMap protein-coding gene expression file into a
-#' `ProteinExpressionAssay`.
+#' `RNAAssay`.
 #'
 #' The DepMap expression file is read, filtered to default model entries, and
 #' converted into a Bioconductor-style expression matrix with features as rows
@@ -24,12 +24,12 @@ library(data.table)
 #'   as model/sample identifiers.
 #' @param feature_type A character string describing the expression feature type.
 #'
-#' @return A `ProteinExpressionAssay`, which inherits from
+#' @return A `RNAAssay`, which inherits from
 #'   `SummarizedExperiment`.
 #'
 #' @include internal-metadata.R
 #' @keywords internal
-load_protein_expression_assay <- function(
+load_RNA_assay <- function(
   path,
   assay_name = "Protein Expression",
   model_metadata_path = NULL,
@@ -399,10 +399,10 @@ load_protein_expression_assay <- function(
   }
 
   ## ---------------------------------------------------
-  ## Return ProteinExpressionAssay
+  ## Return RNAAssay
   ## ---------------------------------------------------
 
-  ProteinExpressionAssay(
+  RNAAssay(
     data = expression_matrix,
     rowData = feature_metadata,
     colData = model_metadata,

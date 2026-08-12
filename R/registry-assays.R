@@ -13,7 +13,7 @@ library(enumr)
 #' @keywords internal
 supported_assays <- tibble::tribble(
   ~assay_type,
-  ~OncoAssay_ßclass,
+  ~OncoAssay_class,
   ~loader,
 
   ## ---------------------------------------------------
@@ -81,5 +81,5 @@ get_supported_types <- function() {
 #' @export
 AssayTypes <- enumr::enum( # nolint
   RNA = "RNA",
-  PRISM = "PRISM",
+  PRISM = "PRISM"
 )

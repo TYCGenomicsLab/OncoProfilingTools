@@ -4,30 +4,31 @@
 \alias{load_assays,OncoExperiment-method}
 \title{Load assay data into an OncoExperiment object}
 \usage{
-\S4method{load_assays}{OncoExperiment}(object, assay_type = NULL, path = ".cache", overwrite = FALSE, ...)
+\S4method{load_assays}{OncoExperiment}(
+  object,
+  assay_type = NULL,
+  data = NULL,
+  metadata = NULL,
+  overwrite = FALSE,
+  ...
+)
 }
 \arguments{
 \item{object}{An `OncoExperiment` object to which the assay will be added.}
 
-\item{assay_type}{A character vector specifying the assay type(s) being loaded,
-such as `"Expression"` or `"PRISM"`.}
+\item{assay_type}{A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.}
 
-\item{path}{A character string specifying the directory or specific file path
-where the assay data is located.}
+\item{data}{A character string specifying the path to the data file. This is required.}
+
+\item{metadata}{A character string specifying the path to the metadata file. This is optional but highly recommended.}
 
 \item{overwrite}{A logical value indicating whether to overwrite an existing
 assay with the same name.}
-
-\item{...}{Additional arguments passed to assay-specific loader functions.}
 }
 \value{
 The updated `OncoExperiment` object.
 }
 \description{
-Loads one or more supported assay files into an `OncoExperiment`.
-}
-\details{
-The assay type determines which registered loader is used. Each loader returns
-an assay object, such as an `ExpressionAssay`, which is then added to the
-`OncoExperiment`.
+This function loads and parses the specified data and metadata files and appends to the @assays 
+slot of the `OncoExperiment` object. You can view available assay types by printing `AssayTypes`.
 }
