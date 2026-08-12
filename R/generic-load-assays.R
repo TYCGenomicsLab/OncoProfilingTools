@@ -15,13 +15,11 @@ library(methods)
 #' @export
 methods::setGeneric(
   name = "load_assays",
-  def = function(
-      object,
-      assay_type = NULL,
-      data = NULL,
-      metadata = NULL,
-      ...) {
-
+  def = function(object,
+                 assay_type = NULL,
+                 data = NULL,
+                 metadata = NULL,
+                 ...) {
     if (missing(object)) {
       stop("`object` is required.", call. = FALSE)
     }
