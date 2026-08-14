@@ -29,6 +29,6 @@ assay with the same name.}
 The updated `OncoExperiment` object.
 }
 \description{
-This function loads and parses the specified data and metadata files and appends to the @assays 
+This function loads and parses the specified data and metadata files and appends to the @assays
 slot of the `OncoExperiment` object. You can view available assay types by printing `AssayTypes`.
 }

@@ -74,7 +74,7 @@ methods::setMethod(
     ## Validate that the assay type is loadable
     ## ---------------------------------------------------
 
-    loadable_types <- unique(stats::na.omit(.get_loadable_assay_registry()$assay_type))
+    loadable_types <- unique(stats::na.omit(.get_loadable_assay_registry()$assay_name))
 
     unsupported_types <- setdiff(assay_type, loadable_types)
 
@@ -123,7 +123,7 @@ methods::setMethod(
       dplyr::filter(assay_name == assay_type)
 
     assay <- .load_assay(
-      assay_type = context$assay_type,
+      assay_type = context$assay_name,
       OncoAssay_class = context$OncoAssay_class,
       loader = context$loader,
       data_path = data,

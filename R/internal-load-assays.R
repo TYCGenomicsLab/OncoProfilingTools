@@ -126,7 +126,7 @@ library(methods)
       "File matched multiple loadable assay registry entries: ",
       filename,
       "\nMatched assay types: ",
-      paste(unique(matched_registry$assay_type), collapse = ", "),
+      paste(unique(matched_registry$assay_name), collapse = ", "),
       "\nMatched loaders: ",
       paste(unique(matched_registry$loader), collapse = ", "),
       call. = FALSE
@@ -137,7 +137,7 @@ library(methods)
     path = normalizePath(file, winslash = "/", mustWork = TRUE),
     filename = filename,
     release_name_pattern = matched_registry$release_name_pattern,
-    assay_type = matched_registry$assay_type,
+    assay_type = matched_registry$assay_name,
     OncoAssay_class = matched_registry$OncoAssay_class,
     filename_pattern = matched_registry$filename_pattern,
     loader = matched_registry$loader
@@ -170,23 +170,28 @@ library(methods)
 #' @return An assay object of the expected class.
 #' @keywords internal
 .load_assay <- function(
-  path,
-  filename,
   assay_type,
   OncoAssay_class,
   loader,
+  data_path,
+  metadata_path = NULL,
   ...
 ) {
-  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-    stop("`path` must be a single non-empty character string.", call. = FALSE)
+  if (!is.character(data_path) || length(data_path) != 1L || is.na(data_path) || !nzchar(data_path)) {
+    stop("`data_path` must be a single non-empty character string.", call. = FALSE)
   }
 
-  if (!file.exists(path)) {
-    stop("Assay file does not exist: ", path, call. = FALSE)
+  if (!file.exists(data_path)) {
+    stop("Assay file does not exist: ", data_path, call. = FALSE)
   }
 
-  if (!is.character(filename) || length(filename) != 1L || is.na(filename) || !nzchar(filename)) {
-    stop("`filename` must be a single non-empty character string.", call. = FALSE)
+  if (!is.null(metadata_path)) {
+    if (!is.character(metadata_path) || length(metadata_path) != 1L || is.na(metadata_path) || !nzchar(metadata_path)) {
+      stop("`metadata_path` must be a single non-empty character string.", call. = FALSE)
+    }
+    if (!file.exists(metadata_path)) {
+      stop("Metadata file does not exist: ", metadata_path, call. = FALSE)
+    }
   }
 
   if (!is.character(assay_type) || length(assay_type) != 1L || is.na(assay_type) || !nzchar(assay_type)) {
@@ -212,7 +217,8 @@ library(methods)
   loader_fn <- get(loader, mode = "function")
 
   assay <- loader_fn(
-    path = path,
+    data_path = data_path,
+    metadata_path = metadata_path,
     assay_name = assay_type,
     ...
   )

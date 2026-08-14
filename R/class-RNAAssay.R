@@ -202,14 +202,15 @@ RNAAssay <- function(
     )
   )
 
+  assay_slots <- S4Vectors::SimpleList()
+  assay_slots[[assay_name]] <- data
+
   se <- SummarizedExperiment::SummarizedExperiment(
-    assays = S4Vectors::SimpleList(
-      protein_expression = data
-    ),
+    assays = assay_slots,
     rowData = rowData,
     colData = colData,
     metadata = metadata
   )
 
-  methods::as(se, "ProteinExpressionAssay")
+  methods::as(se, "RNAAssay")
 }

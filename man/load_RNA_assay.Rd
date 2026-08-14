@@ -5,9 +5,9 @@
 \title{Load a DepMap protein-coding gene expression assay}
 \usage{
 load_RNA_assay(
-  path,
+  data_path,
+  metadata_path = NULL,
   assay_name = "Protein Expression",
-  model_metadata_path = NULL,
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
@@ -15,12 +15,7 @@ load_RNA_assay(
 )
 }
 \arguments{
-\item{path}{A character string specifying the path to the expression assay file.}
-
 \item{assay_name}{A character string specifying the assay name used in metadata.}
-
-\item{model_metadata_path}{Optional path to `Model.csv`. If `NULL`, the loader
-searches for `Model.csv` beside `path`.}
 
 \item{unit}{A character string specifying the expression unit.}
 
@@ -30,6 +25,11 @@ searches for `Model.csv` beside `path`.}
 as model/sample identifiers.}
 
 \item{feature_type}{A character string describing the expression feature type.}
+
+\item{path}{A character string specifying the path to the expression assay file.}
+
+\item{model_metadata_path}{Optional path to `Model.csv`. If `NULL`, the loader
+searches for `Model.csv` beside `path`.}
 }
 \value{
 A `RNAAssay`, which inherits from

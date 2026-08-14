@@ -12,23 +12,17 @@ library(enumr)
 #'
 #' @keywords internal
 supported_assays <- tibble::tribble(
-  ~assay_type,
-  ~OncoAssay_class,
-  ~loader,
+  ~assay_name, ~OncoAssay_class, ~loader,
 
   ## ---------------------------------------------------
   ## PRISM response assay
   ## ---------------------------------------------------
-  "PRISM",
-  "DrugResponseAssay",
-  "load_drug_response_assay",
+  "PRISM", "DrugResponseAssay", "load_drug_response_assay",
 
   ## ---------------------------------------------------
   ## RNA expression assay
   ## ---------------------------------------------------
-  "RNA",
-  "RNAAssay",
-  "load_RNA_assay",
+  "RNA", "RNAAssay", "load_RNA_assay"
 )
 
 #' List supported assay types
@@ -39,7 +33,18 @@ supported_assays <- tibble::tribble(
 #'
 #' @export
 get_supported_types <- function() {
-  unique(stats::na.omit(supported_assays$assay_type))
+  unique(stats::na.omit(supported_assays$assay_name))
+}
+
+#' List all supported assays
+#'
+#' Returns all supported assays in a tribble to be used as a lookup table.
+#'
+#' @return A tribble
+#'
+#' @export
+get_supported_assays <- function() {
+  supported_assays
 }
 
 #' Get loadable assay registry
@@ -54,7 +59,7 @@ get_supported_types <- function() {
 #' @keywords internal
 .get_loadable_assay_registry <- function(assay_type = NULL) {
   registry <- supported_assays[
-    !is.na(supported_assays$assay_type) &
+    !is.na(supported_assays$assay_name) &
       !is.na(supported_assays$OncoAssay_class) &
       !is.na(supported_assays$loader), ,
     drop = FALSE
@@ -62,7 +67,7 @@ get_supported_types <- function() {
 
   if (!is.null(assay_type)) {
     registry <- registry[
-      registry$assay_type %in% assay_type, ,
+      registry$assay_name %in% assay_type, ,
       drop = FALSE
     ]
   }
