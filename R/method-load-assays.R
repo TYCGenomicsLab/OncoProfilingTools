@@ -90,7 +90,7 @@ methods::setMethod(
     }
 
     ## ---------------------------------------------------
-    ## Resolve files to load based on assay type
+    ## Check if the given files exist
     ## ---------------------------------------------------
 
     if (!file.exists(data)) {
@@ -103,41 +103,40 @@ methods::setMethod(
       )
     }
 
-    resolved_files <- .resolve_files_to_load(
-      path = data,
-      assay_type = assay_type
-    )
-
-    if (!inherits(resolved_files, "data.frame") || nrow(resolved_files) == 0L) {
+    if (!is.null(metadata) && !file.exists(metadata)) {
       stop(
-        "No loadable assay files were resolved.",
+        sprintf(
+          "Specified metadata file '%s' does not exist. Please check the file path and try again.",
+          metadata
+        ),
         call. = FALSE
       )
     }
 
     ## ---------------------------------------------------
-    ## Load each resolved file and add it to object
+    ## Load the file and add it to the object
     ## ---------------------------------------------------
 
-    for (i in seq_len(nrow(resolved_files))) {
-      message(sprintf("Loading assay file: %s", resolved_files$filename[[i]]))
+    # Prepare arguments for loader function by looking up
+    # corresponding values in supported_assays tibble based on assay_type
+    context <- get_supported_assays() %>%
+      dplyr::filter(assay_name == assay_type)
 
-      assay <- .load_assay(
-        path = resolved_files$path[[i]],
-        filename = resolved_files$filename[[i]],
-        assay_type = resolved_files$assay_type[[i]],
-        OncoAssay_class = resolved_files$OncoAssay_class[[i]],
-        loader = resolved_files$loader[[i]],
-        ...
-      )
+    assay <- .load_assay(
+      assay_type = context$assay_type,
+      OncoAssay_class = context$OncoAssay_class,
+      loader = context$loader,
+      data_path = data,
+      metadata_path = metadata,
+      ...
+    )
 
-      object <- add_assay(
-        object = object,
-        assay = assay,
-        name = resolved_files$assay_type[[i]],
-        overwrite = overwrite
-      )
-    }
+    object <- add_assay(
+      object = object,
+      assay = assay,
+      name = context$assay_name,
+      overwrite = overwrite
+    )
 
     ## ---------------------------------------------------
     ## Final validation and return
