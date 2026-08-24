@@ -29,7 +29,7 @@ library(data.table)
 #' @include internal-metadata.R
 #' @keywords internal
 load_drug_response_assay <- function(
-  path,
+  data_path,
   assay_name = "PRISM Primary Repurposing",
   compound_metadata_path = NULL,
   cell_line_metadata_path = NULL,
