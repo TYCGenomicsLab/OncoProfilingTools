@@ -2,9 +2,11 @@ Package: OncoProfilingTools
 Type: Package
 Title: Tools for Oncology Profiling Data Analysis
 Version: 0.1.0
-Authors@R: person("Jason", "LaPierre",
-    email = "lapierreja@vcu.edu",
-    role = c("aut", "cre"))
+Authors@R: c(
+    person(given = "Jason", family = "LaPierre", role = c("aut", "cre"), email = "lapierreja@vcu.edu", comment = c(ORCID = "0009-0006-1827-8213")),
+    person(given = "Johnna", family = "Berryhill", role = "aut", email = "berryhilljk@vcu.edu"),
+    person(given = "Katarzyna M.", family = "Tyc", role = "aut")
+    )
 Description: Provides S4 classes and methods for managing and analyzing
     cancer genomic profiling data, with integration to the DepMap project
     for downloading and organizing oncology assays.
