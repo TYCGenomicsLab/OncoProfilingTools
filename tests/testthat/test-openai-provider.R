@@ -38,18 +38,24 @@ openai_test_payload <- function(model = "gpt-5.6-terra") {
 
 with_test_openai_key <- function(code) {
   old <- Sys.getenv("OPENAI_API_KEY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
+    },
+    add = TRUE
+  )
   Sys.setenv(OPENAI_API_KEY = "sk-test-never-serialize-this-value")
   force(code)
 }
 
 testthat::test_that("OpenAI settings require an environment key and explicit data consent", {
   old <- Sys.getenv("OPENAI_API_KEY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
+    },
+    add = TRUE
+  )
 
   Sys.unsetenv("OPENAI_API_KEY")
   testthat::expect_match(

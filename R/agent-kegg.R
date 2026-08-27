@@ -121,13 +121,15 @@ run_kegg_enrichment_with_retry <- function(
       ),
       error = function(error) error
     )
-    if (!inherits(value, "condition")) return(value)
+    if (!inherits(value, "condition")) {
+      return(value)
+    }
 
     last_error <- value
     transient <- is_transient_kegg_error(value)
     if (!transient || attempt >= max_attempts) break
 
-    delay <- retry_delay_seconds * (2 ^ (attempt - 1L))
+    delay <- retry_delay_seconds * (2^(attempt - 1L))
     message(
       "KEGG REST request attempt ", attempt, " of ", max_attempts,
       " failed transiently (", conditionMessage(value), "). Retrying in ",

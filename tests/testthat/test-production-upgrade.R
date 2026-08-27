@@ -314,10 +314,13 @@ testthat::test_that("23b report keeps a documented 3D network for STRING only", 
   original_interactions <- result_files$string$interactions
   result_files$string$csv <<- nodes_file
   result_files$string$interactions <<- interactions_file
-  on.exit({
-    result_files$string$csv <<- original_nodes
-    result_files$string$interactions <<- original_interactions
-  }, add = TRUE)
+  on.exit(
+    {
+      result_files$string$csv <<- original_nodes
+      result_files$string$interactions <<- original_interactions
+    },
+    add = TRUE
+  )
   bundle <- generate_interpretation_bundle(list(string = nodes), list(enabled = FALSE))
   build_combined_html_report(report, bundle, "string")
   html <- paste(readLines(report, warn = FALSE), collapse = "\n")
