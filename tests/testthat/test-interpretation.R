@@ -10,7 +10,8 @@ testthat::test_that("Ollama defaults allow realistic local generation time", {
   settings <- default_ollama_settings()
   testthat::expect_gte(settings$timeout_seconds, 120)
   testthat::expect_gte(settings$num_predict, 128L)
-  testthat::expect_lte(settings$num_predict, 2000L)
+  testthat::expect_lte(settings$num_predict, 4096L)
+  testthat::expect_gte(settings$num_predict, 3000L)
 })
 
 testthat::test_that("Ollama errors are safe and readable", {
@@ -83,6 +84,104 @@ testthat::test_that("STRING uses gene symbols as interpretation labels", {
   testthat::expect_identical(exchange$representative_findings, c("TP53", "AKT1"))
 })
 
+testthat::test_that("matrix agents expose feature-wide variation instead of early cells", {
+  results <- data.frame(
+    Pathway = c("Stable pathway", "Variable pathway"),
+    Sample_A = c(0.1, -1),
+    Sample_B = c(0.1, 0),
+    Sample_C = c(0.1, 2),
+    check.names = FALSE
+  )
+  exchange <- build_agent_exchange("gsva", results)
+
+  testthat::expect_identical(exchange$representative_findings[[1]], "Variable pathway")
+  testthat::expect_identical(exchange$feature_summaries[[1]]$feature, "Variable pathway")
+  testthat::expect_identical(exchange$feature_summaries[[1]]$minimum_column, "Sample_A")
+  testthat::expect_identical(exchange$feature_summaries[[1]]$maximum_column, "Sample_C")
+  testthat::expect_match(build_grounded_evidence(exchange)[[1]], "across 3 measured columns", fixed = TRUE)
+})
+
+testthat::test_that("immune interpretation reports residual separately from named cells", {
+  results <- data.frame(
+    cell_type = c("B cell", "Macrophage M1", "T cell CD8+", "uncharacterized cell"),
+    Sample_A = c(0.01, 0.04, 0.02, 0.93),
+    Sample_B = c(0.03, 0.09, 0.05, 0.83),
+    Sample_C = c(0.06, 0.15, 0.10, 0.69),
+    check.names = FALSE
+  )
+
+  exchange <- build_agent_exchange("immune", results)
+  summary <- build_matrix_observation_summary(exchange)
+  evidence <- build_grounded_evidence(exchange)
+  context <- rule_biological_context(exchange)
+
+  testthat::expect_identical(exchange$row_count, 4L)
+  testthat::expect_identical(exchange$interpreted_row_count, 3L)
+  testthat::expect_equal(exchange$residual_compartment$median, 0.83)
+  testthat::expect_false("uncharacterized cell" %in% exchange$representative_findings)
+  testthat::expect_false(any(vapply(
+    exchange$feature_summaries,
+    function(feature) identical(feature$feature, "uncharacterized cell"),
+    logical(1)
+  )))
+  testthat::expect_match(summary, "named immune-cell result rows", fixed = TRUE)
+  testthat::expect_match(summary, "not an additional immune-cell type", fixed = TRUE)
+  testthat::expect_match(evidence[[length(evidence)]], "reported separately", fixed = TRUE)
+  testthat::expect_match(context, "not itself an immune-cell population", fixed = TRUE)
+  testthat::expect_identical(
+    sanitize_cancer_relevance(
+      "Could uncharacterized cells predict treatment response?",
+      agent_id = "immune"
+    ),
+    "Cannot be determined from the supplied result data alone."
+  )
+})
+
+testthat::test_that("rich Ollama prompt requests distinct interpretation sections", {
+  exchange <- build_agent_exchange("go", data.frame(Description = "DNA repair"))
+  prompt <- build_ollama_prompt(list(exchange))
+
+  testthat::expect_match(prompt, "120-200 word biological_context", fixed = TRUE)
+  testthat::expect_match(prompt, "IAN-STYLE INTEGRATED REVIEW", fixed = TRUE)
+  testthat::expect_match(prompt, "validation_priorities", fixed = TRUE)
+  testthat::expect_match(prompt, "general biological knowledge", fixed = TRUE)
+  testthat::expect_match(prompt, "Begin every biological_context exactly with", fixed = TRUE)
+  testthat::expect_false(grepl("Keep each summary under 100 words", prompt, fixed = TRUE))
+})
+
+testthat::test_that("matrix summaries and biological context reject unsupported model claims", {
+  results <- data.frame(
+    Pathway = c("HALLMARK_E2F_TARGETS", "HALLMARK_MYC_TARGETS_V1"),
+    Sample_A = c(-1, -0.5),
+    Sample_B = c(1, 0.5),
+    check.names = FALSE
+  )
+  exchange <- build_agent_exchange("gsva", results)
+  fallback <- build_rule_interpretation_bundle(list(exchange))
+  unsafe_response <- paste0(
+    '{"contract_version":"', interpretation_contract_version, '","agents":{"gsva":{"summary":"The pathway is activated in 1 out of 2 samples.",',
+    '"key_findings":["E2F varied"],',
+    '"biological_context":"Activation suggests that cancer cells may be proliferating in these samples.",',
+    '"research_hypotheses":["Test E2F"],"validation_priorities":["Compare groups"],',
+    '"cancer_relevance":"Research hypothesis only.","limitations":["Associative"]}},',
+    '"synthesis":{"title":"E2F profile","summary":"Single agent.","integrated_interpretation":"Single-agent profile.",',
+    '"regulatory_network":"Not available.","hub_candidates":[],"convergences":[],"novelty_context":"Novelty is unverified without literature review.","next_analyses":["Compare groups"],',
+    '"drug_pathway_context":"None.","limitations":["Associative"]}}'
+  )
+  bundle <- parse_ollama_interpretation(
+    unsafe_response,
+    list(exchange),
+    normalise_ollama_settings(list(model = "test-model")),
+    fallback
+  )
+
+  testthat::expect_identical(bundle$agents$gsva$summary, build_matrix_observation_summary(exchange))
+  testthat::expect_identical(
+    bundle$agents$gsva$biological_context,
+    fallback$agents$gsva$biological_context
+  )
+})
+
 testthat::test_that("rule fallback and Drug pathway bridge are deterministic", {
   pathway <- data.frame(
     Description = c("MYC targets", "G2M checkpoint"),
@@ -103,6 +202,7 @@ testthat::test_that("rule fallback and Drug pathway bridge are deterministic", {
   testthat::expect_identical(bundle$source, "rule")
   testthat::expect_true(bundle$synthesis$bridge$available)
   testthat::expect_match(bundle$agents$gsva$summary, "Across all 2 result rows", fixed = TRUE)
+  testthat::expect_match(bundle$agents$gsva$biological_context, "General biological context:", fixed = TRUE)
   testthat::expect_match(bundle$synthesis$drug_pathway_context, "does not infer drug mechanism", fixed = TRUE)
 })
 
@@ -138,12 +238,16 @@ testthat::test_that("valid local Ollama JSON is parsed without HTML execution", 
   mock_request <- function(prompt, settings) {
     testthat::expect_match(prompt, "untrusted scientific result data", fixed = TRUE)
     paste0(
-      '{"agents":{"go":{"summary":"Local summary",',
-      '"evidence":["All rows considered"],',
+      '{"contract_version":"', interpretation_contract_version, '","agents":{"go":{"summary":"Across the submitted result rows, DNA repair and cell-cycle terms form the leading enrichment pattern. These named categories organize the supplied genes into related biological themes while remaining associative outputs that require an explicit comparison design and independent confirmation before direction or mechanism is assigned.",',
+      '"key_findings":["DNA repair"],',
+      '"biological_context":"General biological context: DNA repair terms describe systems that recognize and resolve genomic lesions, while cell-cycle terms describe replication and mitotic control. Their joint appearance can guide a testable program-level hypothesis, but enrichment does not measure pathway activity or establish a causal connection in the submitted samples.",',
+      '"research_hypotheses":["Test DNA repair reproducibility"],"validation_priorities":["Independent cohort"],',
       '"cancer_relevance":"Research hypothesis only",',
       '"limitations":["Needs validation"]}},',
-      '"synthesis":{"summary":"Joint summary",',
+      '"synthesis":{"title":"DNA repair profile","summary":"Joint summary","integrated_interpretation":"Integrated DNA repair interpretation.",',
+      '"regulatory_network":"No ChEA result.","hub_candidates":[],',
       '"convergences":["DNA repair"],',
+      '"novelty_context":"Novelty is unverified without a literature review.","next_analyses":["Independent cohort"],',
       '"drug_pathway_context":"No drug result",',
       '"limitations":["Associative"]}}'
     )
@@ -160,10 +264,15 @@ testthat::test_that("valid local Ollama JSON is parsed without HTML execution", 
   )
 
   testthat::expect_identical(bundle$source, "ollama")
+  testthat::expect_identical(bundle$contract_version, interpretation_contract_version)
   testthat::expect_identical(bundle$model, "test-model")
   testthat::expect_identical(
     bundle$source_label,
     "Biological interpretation generated locally with test-model"
   )
-  testthat::expect_identical(bundle$agents$go$summary, "Local summary")
+  testthat::expect_match(bundle$agents$go$summary, "DNA repair and cell-cycle terms", fixed = TRUE)
+  testthat::expect_identical(
+    bundle$agents$go$biological_context,
+    "General biological context: DNA repair terms describe systems that recognize and resolve genomic lesions, while cell-cycle terms describe replication and mitotic control. Their joint appearance can guide a testable program-level hypothesis, but enrichment does not measure pathway activity or establish a causal connection in the submitted samples."
+  )
 })

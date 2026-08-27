@@ -167,6 +167,201 @@ normalise_column_name <- function(value) {
 }
 
 
+looks_like_gene_identifier <- function(values) {
+  values <- trimws(as.character(values))
+  valid <- !is.na(values) & nzchar(values)
+  result <- grepl("^ENSG[0-9]{11}(?:[.][0-9]+)?$", values, ignore.case = TRUE) |
+    grepl("^[0-9]{1,12}$", values) |
+    grepl("^[A-Za-z][A-Za-z0-9.-]{1,30}$", values)
+  result[!valid] <- FALSE
+  result
+}
+
+
+detect_gene_identifier_type <- function(values) {
+  values <- trimws(as.character(values))
+  values <- values[!is.na(values) & nzchar(values)]
+  if (!length(values)) return("unknown")
+
+  ensembl <- mean(grepl("^ENSG[0-9]{11}(?:[.][0-9]+)?$", values, ignore.case = TRUE))
+  entrez <- mean(grepl("^[0-9]{1,12}$", values))
+  symbols <- mean(grepl("^[A-Za-z][A-Za-z0-9.-]{1,30}$", values))
+
+  if (ensembl >= 0.8) return("ensembl")
+  if (entrez >= 0.8) return("entrez")
+  if (symbols >= 0.8) return("symbol")
+  if (max(ensembl, entrez, symbols) >= 0.3) return("mixed")
+  "unknown"
+}
+
+
+read_analysis_dataset <- function(path, name) {
+  extension <- tolower(tools::file_ext(name))
+  delimiter <- switch(extension, csv = ",", tsv = "\t", txt = "\t", NULL)
+  if (is.null(delimiter)) {
+    stop("Upload a CSV, TSV, or TXT file.", call. = FALSE)
+  }
+
+  preview_lines <- readLines(path, n = 8L, warn = FALSE, encoding = "UTF-8")
+  preview_lines <- preview_lines[nzchar(trimws(preview_lines))]
+  if (!length(preview_lines)) stop("The uploaded file is empty.", call. = FALSE)
+
+  if (identical(extension, "txt") && !any(grepl("\t", preview_lines, fixed = TRUE))) {
+    delimiter <- if (any(grepl(",", preview_lines, fixed = TRUE))) "," else "\t"
+  }
+
+  split_line <- function(line) {
+    if (identical(delimiter, "\t") && !grepl("\t", line, fixed = TRUE)) {
+      return(trimws(line))
+    }
+    trimws(strsplit(line, delimiter, fixed = TRUE)[[1L]])
+  }
+
+  first_fields <- split_line(preview_lines[[1L]])
+  normalized_first <- normalise_column_name(first_fields)
+  recognized_headers <- c(
+    "genesymbol", "hugosymbol", "hgncsymbol", "gene", "genes", "symbol",
+    "geneid", "ensembl", "ensemblgeneid", "entrezid", "genename", "genetype",
+    "compound", "compoundname", "drug", "drugname", "treatment", "response",
+    "auc", "ic50", "viability", "sensitivity", "log2foldchange", "logfc",
+    "pvalue", "padj", "fdr", "qvalue"
+  )
+  explicit_header <- any(normalized_first %in% recognized_headers)
+  data_like_first <- mean(
+    looks_like_gene_identifier(first_fields) |
+      grepl("^-?[0-9]+(?:[.][0-9]+)?(?:e[+-]?[0-9]+)?$", first_fields, ignore.case = TRUE)
+  ) >= 0.8
+  header_detected <- explicit_header || !data_like_first
+
+  column_names <- if (header_detected) TRUE else FALSE
+  data <- readr::read_delim(
+    path,
+    delim = delimiter,
+    col_names = column_names,
+    show_col_types = FALSE,
+    progress = FALSE,
+    name_repair = "unique",
+    trim_ws = TRUE
+  )
+
+  if (!header_detected) {
+    names(data) <- if (ncol(data) == 1L) "gene_id" else paste0("column_", seq_len(ncol(data)))
+  }
+
+  attr(data, "import_metadata") <- list(
+    source_name = basename(name),
+    extension = extension,
+    delimiter = if (identical(delimiter, "\t")) "tab" else "comma",
+    header_detected = header_detected
+  )
+  data
+}
+
+
+map_gene_identifiers <- function(values, identifier_type = NULL) {
+  input <- trimws(as.character(values))
+  input <- input[!is.na(input) & nzchar(input)]
+  input <- unique(input)
+  if (is.null(identifier_type) || !length(identifier_type) || is.na(identifier_type[[1L]])) {
+    identifier_type <- detect_gene_identifier_type(input)
+  }
+  identifier_type <- as.character(identifier_type[[1L]])
+
+  if (!length(input)) {
+    return(list(
+      symbols = character(),
+      entrez_ids = character(),
+      metadata = list(
+        identifier_type = identifier_type,
+        input_count = 0L,
+        mapped_count = 0L,
+        unmapped_count = 0L,
+        duplicate_mappings_removed = 0L,
+        mapping_rate = 0,
+        unmapped_examples = character()
+      ),
+      mapping_table = data.frame()
+    ))
+  }
+
+  if (identical(identifier_type, "symbol")) {
+    symbols <- toupper(input)
+    table <- data.frame(
+      input_id = input,
+      normalized_id = symbols,
+      SYMBOL = symbols,
+      ENTREZID = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    if (!requireNamespace("AnnotationDbi", quietly = TRUE) ||
+        !requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+      stop(
+        "Human identifier mapping requires AnnotationDbi and org.Hs.eg.db.",
+        call. = FALSE
+      )
+    }
+
+    key_type <- switch(
+      identifier_type,
+      ensembl = "ENSEMBL",
+      entrez = "ENTREZID",
+      mixed = "ENSEMBL",
+      NULL
+    )
+    if (is.null(key_type)) {
+      stop(
+        "Gene identifiers were not recognized. Use HGNC symbols, Ensembl gene IDs, or Entrez IDs.",
+        call. = FALSE
+      )
+    }
+    normalized <- if (identical(key_type, "ENSEMBL")) {
+      toupper(sub("[.][0-9]+$", "", input))
+    } else {
+      sub("[.]0+$", "", input)
+    }
+    selected <- suppressMessages(AnnotationDbi::select(
+      org.Hs.eg.db::org.Hs.eg.db,
+      keys = unique(normalized),
+      keytype = key_type,
+      columns = c("SYMBOL", "ENTREZID")
+    ))
+    names(selected)[names(selected) == key_type] <- "normalized_id"
+    table <- merge(
+      data.frame(input_id = input, normalized_id = normalized, stringsAsFactors = FALSE),
+      selected,
+      by = "normalized_id",
+      all.x = TRUE,
+      sort = FALSE
+    )
+    table <- table[match(input, table$input_id), , drop = FALSE]
+  }
+
+  mapped <- !is.na(table$SYMBOL) & nzchar(trimws(as.character(table$SYMBOL)))
+  symbols_with_duplicates <- toupper(trimws(as.character(table$SYMBOL[mapped])))
+  symbols <- unique(symbols_with_duplicates)
+  entrez_ids <- unique(as.character(table$ENTREZID[mapped]))
+  entrez_ids <- entrez_ids[!is.na(entrez_ids) & nzchar(entrez_ids)]
+  mapped_input_count <- length(unique(table$input_id[mapped]))
+
+  list(
+    symbols = symbols,
+    entrez_ids = entrez_ids,
+    mapping_table = table,
+    metadata = list(
+      identifier_type = identifier_type,
+      input_count = length(input),
+      mapped_count = mapped_input_count,
+      output_symbol_count = length(symbols),
+      unmapped_count = length(input) - mapped_input_count,
+      duplicate_mappings_removed = length(symbols_with_duplicates) - length(symbols),
+      mapping_rate = mapped_input_count / length(input),
+      unmapped_examples = utils::head(table$input_id[!mapped], 8L)
+    )
+  )
+}
+
+
 detect_gene_column <- function(data) {
   if (is.null(data) || ncol(data) == 0) {
     return(NULL)
@@ -182,6 +377,9 @@ detect_gene_column <- function(data) {
     "gene",
     "genename",
     "geneid",
+    "ensembl",
+    "ensemblgeneid",
+    "entrezid",
     "hgncsymbol",
     "externalgenename"
   )
@@ -285,8 +483,8 @@ prepare_gene_input <- function(
   if (is.null(gene_column)) {
     stop(
       paste(
-        "A gene-symbol column could not be detected.",
-        "Use a column such as gene_symbol, Gene, SYMBOL or gene."
+        "A gene identifier column could not be detected.",
+        "Use HGNC symbols, Ensembl gene IDs, or Entrez IDs in a named or single-column file."
       ),
       call. = FALSE
     )
@@ -302,7 +500,7 @@ prepare_gene_input <- function(
       paste(
         "The detected gene column",
         shQuote(gene_column),
-        "does not contain usable gene symbols."
+        "does not contain usable gene identifiers."
       ),
       call. = FALSE
     )
@@ -411,6 +609,18 @@ prepare_gene_input <- function(
     stop("At least two genes must pass the analysis filter.", call. = FALSE)
   }
 
+  mapping <- map_gene_identifiers(selected_genes)
+  if (length(mapping$symbols) < 2L) {
+    stop(
+      paste0(
+        "Only ", length(mapping$symbols), " identifier",
+        if (length(mapping$symbols) == 1L) "" else "s",
+        " mapped to a current human HGNC symbol. At least two mapped genes are required."
+      ),
+      call. = FALSE
+    )
+  }
+
   method <- if (length(selection_parts)) {
     paste(selection_parts, collapse = " and ")
   } else {
@@ -418,15 +628,21 @@ prepare_gene_input <- function(
   }
   capped <- sum(selected) > length(selected_genes)
   selection_note <- paste0(
-    "Analysis used ", format(length(selected_genes), big.mark = ","), " of ",
+    "Analysis selected ", format(length(selected_genes), big.mark = ","), " of ",
     format(original_gene_count, big.mark = ","), " usable genes using ", method,
     if (capped) paste0(" (capped at the ", format(length(selected_genes), big.mark = ","), " strongest rows)") else "",
     if (!is.null(effects)) "; positive and negative effects are combined" else "",
-    "."
+    ". Identifier type: ", mapping$metadata$identifier_type,
+    "; mapped ", mapping$metadata$mapped_count, "/", mapping$metadata$input_count,
+    " inputs to ", mapping$metadata$output_symbol_count, " unique HGNC symbols."
   )
 
   list(
-    genes = selected_genes,
+    genes = mapping$symbols,
+    entrez_ids = mapping$entrez_ids,
+    selected_identifiers = selected_genes,
+    mapping = mapping$mapping_table,
+    mapping_metadata = mapping$metadata,
     column = gene_column,
     data = data[selected_rows, , drop = FALSE],
     original_gene_count = original_gene_count,
@@ -1268,20 +1484,14 @@ save_string_network_plot <- function(result, output_file, max_nodes = 35L) {
 }
 
 
-save_immune_composition_plot <- function(
+prepare_immune_composition_plot <- function(
   result_data,
-  output_file,
   max_cell_types = 30L,
-  max_samples = 40L
+  max_samples = 60L
 ) {
-  remove_stale_plot <- function() {
-    if (file.exists(output_file)) unlink(output_file)
-    FALSE
-  }
-
   result_data <- as.data.frame(result_data, stringsAsFactors = FALSE)
   if (!nrow(result_data) || ncol(result_data) < 2L) {
-    return(remove_stale_plot())
+    return(NULL)
   }
 
   normalized_names <- tolower(gsub("[^a-z0-9]", "", names(result_data)))
@@ -1305,13 +1515,32 @@ save_immune_composition_plot <- function(
 
   valid_cell_types <- !is.na(cell_types) & nzchar(cell_types)
   if (!length(sample_values) || !any(valid_cell_types)) {
-    return(remove_stale_plot())
+    return(NULL)
   }
 
   abundance_matrix <- do.call(cbind, sample_values)
   abundance_matrix <- abundance_matrix[valid_cell_types, , drop = FALSE]
   rownames(abundance_matrix) <- make.unique(cell_types[valid_cell_types])
   abundance_matrix[!is.finite(abundance_matrix)] <- NA_real_
+
+  normalized_cell_types <- tolower(gsub("[^a-z0-9]", "", rownames(abundance_matrix)))
+  residual_rows <- normalized_cell_types %in% c(
+    "other",
+    "uncharacterizedcell",
+    "uncharacterisedcell",
+    "unresolved",
+    "unresolvedother",
+    "unknown"
+  )
+
+  residual_values <- if (any(residual_rows)) {
+    colSums(abundance_matrix[residual_rows, , drop = FALSE], na.rm = TRUE)
+  } else {
+    numeric()
+  }
+
+  abundance_matrix <- abundance_matrix[!residual_rows, , drop = FALSE]
+  if (!nrow(abundance_matrix)) return(NULL)
 
   cell_scores <- rowMeans(abs(abundance_matrix), na.rm = TRUE)
   cell_scores[!is.finite(cell_scores)] <- 0
@@ -1320,12 +1549,58 @@ save_immune_composition_plot <- function(
   ]
   abundance_matrix <- abundance_matrix[selected_cells, , drop = FALSE]
 
-  sample_scores <- apply(abundance_matrix, 2, stats::var, na.rm = TRUE)
-  sample_scores[!is.finite(sample_scores)] <- 0
-  selected_samples <- names(sort(sample_scores, decreasing = TRUE))[
-    seq_len(min(as.integer(max_samples), length(sample_scores)))
-  ]
+  total_samples <- ncol(abundance_matrix)
+  sample_limit <- min(as.integer(max_samples), total_samples)
+  if (total_samples > sample_limit) {
+    sample_scores <- apply(abundance_matrix, 2, stats::var, na.rm = TRUE)
+    sample_scores[!is.finite(sample_scores)] <- 0
+    selected_positions <- sort(order(sample_scores, decreasing = TRUE)[seq_len(sample_limit)])
+    selected_samples <- colnames(abundance_matrix)[selected_positions]
+  } else {
+    selected_samples <- colnames(abundance_matrix)
+  }
   abundance_matrix <- abundance_matrix[, selected_samples, drop = FALSE]
+
+  residual_summary <- NULL
+  finite_residual <- residual_values[is.finite(residual_values)]
+  if (length(finite_residual)) {
+    residual_summary <- list(
+      label = "Unresolved/other compartment",
+      measured_columns = length(finite_residual),
+      minimum = unname(min(finite_residual)),
+      median = unname(stats::median(finite_residual)),
+      maximum = unname(max(finite_residual))
+    )
+  }
+
+  list(
+    abundance_matrix = abundance_matrix,
+    residual_summary = residual_summary,
+    displayed_samples = ncol(abundance_matrix),
+    total_samples = total_samples
+  )
+}
+
+
+save_immune_composition_plot <- function(
+  result_data,
+  output_file,
+  max_cell_types = 30L,
+  max_samples = 60L
+) {
+  remove_stale_plot <- function() {
+    if (file.exists(output_file)) unlink(output_file)
+    FALSE
+  }
+
+  prepared <- prepare_immune_composition_plot(
+    result_data = result_data,
+    max_cell_types = max_cell_types,
+    max_samples = max_samples
+  )
+  if (is.null(prepared)) return(remove_stale_plot())
+
+  abundance_matrix <- prepared$abundance_matrix
 
   plot_data <- data.frame(
     Cell_Type = rep(rownames(abundance_matrix), times = ncol(abundance_matrix)),
@@ -1345,6 +1620,31 @@ save_immune_composition_plot <- function(
     levels = colnames(abundance_matrix)
   )
 
+  sample_note <- if (prepared$displayed_samples < prepared$total_samples) {
+    paste0(
+      prepared$displayed_samples,
+      " most variable of ",
+      prepared$total_samples,
+      " samples"
+    )
+  } else {
+    paste0("all ", prepared$total_samples, " samples")
+  }
+
+  residual_note <- if (!is.null(prepared$residual_summary)) {
+    paste0(
+      "Unresolved/other compartment is reported separately and excluded from the color scale: median ",
+      round(100 * prepared$residual_summary$median, 1),
+      "% (range ",
+      round(100 * prepared$residual_summary$minimum, 1),
+      "-",
+      round(100 * prepared$residual_summary$maximum, 1),
+      "%)."
+    )
+  } else {
+    "No unresolved/other compartment was returned by the selected method."
+  }
+
   graph <- ggplot2::ggplot(
     plot_data,
     ggplot2::aes(x = Sample, y = Cell_Type, fill = Abundance)
@@ -1352,17 +1652,23 @@ save_immune_composition_plot <- function(
     ggplot2::geom_tile(color = "white", linewidth = 0.25) +
     ggplot2::scale_fill_gradientn(
       colours = c("#071a2c", "#176b87", "#55c9c1", "#f4d35e"),
-      name = "Estimated\nabundance"
+      labels = function(values) paste0(round(100 * values, 1), "%"),
+      name = "Estimated\nfraction"
     ) +
     ggplot2::labs(
-      title = "Immune Cell Composition",
-      subtitle = "Estimated cell populations across expression samples",
+      title = "Named Immune-Cell Composition",
+      subtitle = paste("quanTIseq estimated fractions across", sample_note),
+      caption = paste(
+        residual_note,
+        "Fractions are computational estimates, not direct cell counts."
+      ),
       x = "Sample",
       y = NULL
     ) +
     ggplot2::theme_classic(base_size = 11) +
     ggplot2::theme(
       plot.title = ggplot2::element_text(face = "bold"),
+      plot.caption = ggplot2::element_text(hjust = 0, colour = "#4b5563"),
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
       axis.ticks = ggplot2::element_blank()
     )
@@ -2031,7 +2337,9 @@ execute_gsva_agent <- function(data) {
 run_selected_real_agent <- function(
   agent,
   data,
-  pvalue_cutoff = 0.05
+  pvalue_cutoff = 0.05,
+  effect_cutoff = 1,
+  max_genes = 2000L
 ) {
   agent <- tolower(agent)
 
@@ -2048,7 +2356,9 @@ run_selected_real_agent <- function(
 
       gene_input <- prepare_gene_input(
         data,
-        pvalue_cutoff = pvalue_cutoff
+        pvalue_cutoff = pvalue_cutoff,
+        effect_cutoff = effect_cutoff,
+        max_genes = max_genes
       )
 
       if (length(gene_input$genes) < 2) {
@@ -2081,7 +2391,10 @@ run_selected_real_agent <- function(
 
         wikipathways = execute_wikipathways_agent(
           genes = gene_input$genes,
-          entrez_ids = extract_wikipathways_entrez_ids(gene_input$data),
+          entrez_ids = unique(c(
+            gene_input$entrez_ids,
+            extract_wikipathways_entrez_ids(gene_input$data)
+          )),
           pvalue_cutoff = pvalue_cutoff
         ),
 
@@ -2110,6 +2423,8 @@ run_selected_real_agent <- function(
       )
       result$original_gene_count <- gene_input$original_gene_count
       result$selection_note <- gene_input$selection_note
+      result$mapping_metadata <- gene_input$mapping_metadata
+      result$mapping <- gene_input$mapping
       result$message <- paste(result$message, gene_input$selection_note)
 
       result
@@ -2157,7 +2472,12 @@ prepare_expression_matrix <- function(data, ...) {
     "genes",
     "symbol",
     "gene_name",
-    "hgnc_symbol"
+    "hgnc_symbol",
+    "gene_id",
+    "geneid",
+    "ensembl",
+    "ensembl_gene_id",
+    "entrezid"
   )
 
   gene_index <- which(
@@ -2209,13 +2529,32 @@ prepare_expression_matrix <- function(data, ...) {
     rownames(expression_matrix) <- genes
 
   } else {
+    # Handle a matrix stored as samples × genes. Preserve a leading
+    # sample-identifier column before numeric coercion and transpose.
+    leading_values <- as.character(data[[1L]])
+    leading_is_identifier <- !is.numeric(data[[1L]]) &&
+      length(unique(leading_values[!is.na(leading_values) & nzchar(leading_values)])) >= 2L
+    remaining_numeric <- if (ncol(data) > 1L) {
+      mean(vapply(data[-1L], function(column) {
+        values <- suppressWarnings(as.numeric(as.character(column)))
+        mean(!is.na(values)) >= 0.8
+      }, logical(1))) >= 0.8
+    } else FALSE
 
-    # Handle a matrix stored as samples × genes.
-    expression_matrix <- as.matrix(data)
-    storage.mode(expression_matrix) <- "numeric"
-
-    if (nrow(expression_matrix) < ncol(expression_matrix)) {
-      expression_matrix <- t(expression_matrix)
+    if (leading_is_identifier && remaining_numeric) {
+      numeric_data <- data[-1L]
+      numeric_data[] <- lapply(numeric_data, function(column) {
+        suppressWarnings(as.numeric(as.character(column)))
+      })
+      expression_matrix <- t(as.matrix(numeric_data))
+      colnames(expression_matrix) <- make.unique(leading_values)
+      rownames(expression_matrix) <- names(numeric_data)
+    } else {
+      expression_matrix <- as.matrix(data)
+      storage.mode(expression_matrix) <- "numeric"
+      if (nrow(expression_matrix) < ncol(expression_matrix)) {
+        expression_matrix <- t(expression_matrix)
+      }
     }
   }
 
@@ -2241,6 +2580,17 @@ prepare_expression_matrix <- function(data, ...) {
       genes
     )
   )
+
+  genes <- sub("\\s*\\([0-9]+\\)\\s*$", "", genes)
+
+  identifier_type <- detect_gene_identifier_type(genes)
+  if (identifier_type %in% c("ensembl", "entrez", "mixed")) {
+    mapped <- map_gene_identifiers(genes, identifier_type)
+    mapping_table <- mapped$mapping_table
+    keep_mapped <- !is.na(mapping_table$SYMBOL) & nzchar(trimws(mapping_table$SYMBOL))
+    expression_matrix <- expression_matrix[keep_mapped, , drop = FALSE]
+    genes <- mapping_table$SYMBOL[keep_mapped]
+  }
 
   genes <- toupper(genes)
 

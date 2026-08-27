@@ -16,6 +16,7 @@ Depends: R (>= 4.1.0)
 Imports:
     methods,
     httr2,
+    jsonlite,
     tibble,
     dplyr,
     enumr,
@@ -33,7 +34,6 @@ Imports:
 Remotes:
     ElianHugh/enumr@main
 Suggests:
-    jsonlite,
     testthat (>= 3.0.0),
     roxygen2,
     knitr,
@@ -53,7 +53,9 @@ Suggests:
     enrichR,
     GSVA,
     pheatmap,
-    igraph
+    igraph,
+    plotly,
+    htmlwidgets
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
 Config/testthat/edition: 3

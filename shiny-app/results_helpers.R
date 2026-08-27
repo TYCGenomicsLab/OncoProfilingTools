@@ -300,6 +300,8 @@ interpretation_entry_html <- function(entry) {
   paste0(
     "<div class='interpretation'><h3>Biological interpretation</h3><p>",
     html_escape_value(entry$summary %or_else% "Interpretation is not available."),
+    "</p><h4>What the pattern may mean biologically</h4><p>",
+    html_escape_value(entry$biological_context %or_else% "Additional biological context is not available."),
     "</p><h4>Evidence from the full result set</h4><ul>", evidence,
     "</ul><h4>Cancer relevance</h4><p>",
     html_escape_value(entry$cancer_relevance %or_else% "Not assessed."),
@@ -482,6 +484,12 @@ create_results_bundle <- function(
 }
 
 result_tab_ui <- function(key, title, description) {
+  visualization_copy <- if (identical(key, "string")) {
+    paste(description, "Compare hub degree in the bar view, then inspect retrieved protein associations in the connected 3D network.")
+  } else {
+    paste(description, "Use the professional bar view for clear, exact result comparison.")
+  }
+
   tabPanel(
     title,
 
@@ -498,35 +506,11 @@ result_tab_ui <- function(key, title, description) {
             class = "result-panel-heading",
             div(
               h3(paste(title, "Visualization")),
-              p(description)
+              p(visualization_copy)
             ),
             div(
               class = "result-heading-actions",
               uiOutput(paste0(key, "_result_status")),
-              actionButton(
-                inputId = paste0("open_plot_", key),
-                label = "Full screen",
-                class = "result-fullscreen-button",
-                icon = icon("expand")
-              )
-            )
-          ),
-
-          uiOutput(paste0(key, "_result_plot"))
-        ),
-
-        div(
-          class = "result-table-panel result-inner-card",
-
-          div(
-            class = "result-panel-heading",
-            div(
-              h3(paste(title, "Results")),
-              p("Scores use two decimals; probabilities use scientific notation. CSV files retain source precision.")
-            ),
-
-            div(
-              class = "result-table-actions",
               downloadButton(
                 outputId = paste0("download_report_", key),
                 label = "HTML report",
@@ -536,11 +520,16 @@ result_tab_ui <- function(key, title, description) {
                 outputId = paste0("download_", key),
                 label = "Download CSV",
                 class = "result-download-button"
+              ),
+              actionButton(
+                inputId = paste0("open_plot_", key),
+                label = "Full screen",
+                class = "result-fullscreen-button",
+                icon = icon("expand")
               )
             )
           ),
-
-          DTOutput(paste0(key, "_result_table"))
+          uiOutput(paste0(key, "_result_plot"))
         )
       ),
 
@@ -586,7 +575,8 @@ result_group_ui <- function(group, selected_agents) {
   )
 }
 
-results_center_ui <- function(selected_agents = names(agent_titles)) {
+results_center_ui <- function(selected_agents = names(agent_titles), workflow = "biomarker") {
+  biomarker_workflow <- !identical(workflow, "drug")
   div(
     id = "results-center",
     class = "results-center glass-card",
@@ -595,19 +585,24 @@ results_center_ui <- function(selected_agents = names(agent_titles)) {
       class = "results-center-heading",
 
       div(
-        div(class = "section-label", "STEP 4"),
-        h2("Analysis Results Center"),
+        div(class = "section-label", if (biomarker_workflow) "BIOMARKER RESULTS" else "DRUG-SENSITIVITY RESULTS"),
+        h2(if (biomarker_workflow) "Biomarker Results Center" else "Drug Sensitivity Results Center"),
         p(
           class = "section-description",
           paste(
             "Explore generated outputs from every selected scientific agent.",
-            "Evidence stays on the left; full-result biological interpretation stays on the right."
+            "Observed results stay distinct from the local interpretive layer."
           )
         )
       ),
 
       div(
         class = "results-center-actions",
+        actionLink(
+          "results_back_home",
+          "← Main menu",
+          class = "results-action-button results-navigation-button"
+        ),
         div(
           class = "results-ready-badge",
           span(class = "results-ready-dot"),
@@ -628,18 +623,18 @@ results_center_ui <- function(selected_agents = names(agent_titles)) {
 
     uiOutput("analysis_completion_banner"),
 
-    div(
+    if (length(selected_agents) >= 1L) div(
       class = "cross-agent-shell",
       div(
         class = "cross-agent-heading",
         div(
-          span(class = "section-label", "SHARED CONTEXT"),
-          h3("Cross-agent synthesis"),
-          p("Selected agents publish concise, standardized outputs to one local synthesis layer.")
+          span(class = "section-label", if (length(selected_agents) > 1L) "SHARED CONTEXT" else "INTERPRETATION OVERVIEW"),
+          h3(if (length(selected_agents) > 1L) "Cross-agent synthesis" else "Deep interpretation overview"),
+          p(if (length(selected_agents) > 1L) "Selected agents publish standardized outputs to one grounded local synthesis layer." else "The local model develops the agent result into a structured scientific narrative and validation plan.")
         )
       ),
       uiOutput("cross_agent_synthesis")
-    ),
+    ) else NULL,
 
     lapply(agent_groups, result_group_ui, selected_agents = intersect(selected_agents, names(agent_titles)))
   )
@@ -653,44 +648,81 @@ ollama_model_display <- function(model) {
 
 interpretation_display_label <- function(bundle) {
   model <- ollama_model_display(bundle$model)
+  provider <- bundle$provider %or_else% "ollama"
+  if (identical(bundle$source, "loading")) {
+    return(if (identical(provider, "ollama")) paste0("Loading ", model, " locally…") else paste0("Preparing ", model, "…"))
+  }
+  if (bundle$source %in% c("generating", "pending")) {
+    return(if (identical(provider, "ollama")) paste0("Analyzing full result table with ", model, "…") else paste0("Analyzing the structured result digest with ", model, "…"))
+  }
   switch(
     bundle$source,
-    loading = paste0("Loading ", model, " locally…"),
-    generating = paste0("Analyzing full result table with ", model, "…"),
-    pending = paste0("Analyzing full result table with ", model, "…"),
     ollama = paste("Biological interpretation generated locally with", model),
-    ollama_timeout = "Local interpretation timed out; rule-based summary shown",
-    ollama_unavailable = "Local Ollama unavailable; rule-based summary shown",
-    ollama_error = "Local interpretation failed; rule-based summary shown",
-    bundle$source_label %or_else% "Rule-based fallback"
+    openai = paste("Premium biological interpretation generated with", model),
+    comparison = paste("Ollama and OpenAI comparison completed ·", model),
+    ollama_timeout = "Local interpretation timed out · computed summary available",
+    ollama_unavailable = "Local Ollama unavailable · computed summary available",
+    ollama_error = "Local interpretation ended · computed summary available",
+    openai_timeout = "OpenAI Premium timed out · computed summary available",
+    openai_unavailable = "OpenAI Premium unavailable · computed summary available",
+    openai_error = "OpenAI Premium ended · computed summary available",
+    comparison_timeout = "Provider comparison timed out · computed summary available",
+    comparison_error = "Provider comparison ended · computed summary available",
+    bundle$source_label %or_else% "Computed scientific summary"
   )
 }
 
 interpretation_source_badge <- function(bundle) {
+  if (identical(bundle$source, "loading")) {
+    return(switch(bundle$provider %or_else% "ollama", openai = "OPENAI PREMIUM LOADING", compare = "COMPARISON LOADING", "OLLAMA LOADING"))
+  }
+  if (bundle$source %in% c("generating", "pending")) {
+    return(switch(bundle$provider %or_else% "ollama", openai = "OPENAI PREMIUM GENERATING", compare = "COMPARISON GENERATING", "OLLAMA GENERATING"))
+  }
   switch(
     bundle$source,
     loading = "OLLAMA LOADING",
     generating = "OLLAMA GENERATING",
     pending = "OLLAMA GENERATING",
     ollama = "OLLAMA COMPLETE",
+    openai = "OPENAI PREMIUM COMPLETE",
+    comparison = "COMPARISON COMPLETE",
     ollama_timeout = "OLLAMA TIMED OUT",
     ollama_unavailable = "OLLAMA UNAVAILABLE",
     ollama_error = "OLLAMA ERROR",
-    "SAFE FALLBACK"
+    openai_timeout = "OPENAI TIMED OUT",
+    openai_unavailable = "OPENAI UNAVAILABLE",
+    openai_error = "OPENAI ERROR",
+    comparison_timeout = "COMPARISON TIMED OUT",
+    comparison_error = "COMPARISON ERROR",
+    "COMPUTED SUMMARY"
   )
 }
 
 interpretation_status_label <- function(bundle) {
+  if (identical(bundle$source, "loading")) {
+    return(switch(bundle$provider %or_else% "ollama", openai = "OPENAI PREMIUM LOADING", compare = "COMPARISON LOADING", "OLLAMA LOADING"))
+  }
+  if (bundle$source %in% c("generating", "pending")) {
+    return(switch(bundle$provider %or_else% "ollama", openai = "OPENAI PREMIUM GENERATING", compare = "COMPARISON GENERATING", "OLLAMA GENERATING"))
+  }
   switch(
     bundle$source,
     loading = "OLLAMA LOADING",
     generating = "OLLAMA GENERATING",
     pending = "OLLAMA GENERATING",
     ollama = "OLLAMA COMPLETE",
+    openai = "OPENAI PREMIUM COMPLETE",
+    comparison = "COMPARISON COMPLETE",
     ollama_timeout = "OLLAMA TIMED OUT",
     ollama_unavailable = "OLLAMA UNAVAILABLE",
     ollama_error = "OLLAMA ERROR",
-    "Rule summary active"
+    openai_timeout = "OPENAI TIMED OUT",
+    openai_unavailable = "OPENAI UNAVAILABLE",
+    openai_error = "OPENAI ERROR",
+    comparison_timeout = "COMPARISON TIMED OUT",
+    comparison_error = "COMPARISON ERROR",
+    "COMPUTED SUMMARY"
   )
 }
 
@@ -710,6 +742,37 @@ build_ollama_progress_bundle <- function(exchanges, state, model) {
   bundle <- build_rule_interpretation_bundle(exchanges, reason)
   bundle$source <- state
   bundle$model <- ollama_model_display(model)
+  bundle$source_label <- interpretation_display_label(bundle)
+  bundle
+}
+
+build_provider_progress_bundle <- function(exchanges, state, settings) {
+  settings <- normalise_interpretation_settings(settings)
+  models <- switch(
+    settings$provider,
+    openai = settings$openai_model,
+    compare = paste(settings$model, "vs", settings$openai_model),
+    settings$model
+  )
+  reason <- switch(
+    state,
+    loading = if (identical(settings$provider, "ollama")) {
+      "Ollama is starting locally. Scientific results and downloads remain available."
+    } else {
+      "The selected interpretation provider is starting. Only the structured scientific result digest will be processed; scientific results remain available."
+    },
+    generating = if (identical(settings$provider, "ollama")) {
+      "Ollama is generating a private result-wide interpretation locally. Scientific results remain available."
+    } else if (identical(settings$provider, "openai")) {
+      "OpenAI Premium is processing the structured result digest externally with store=false. Raw uploaded files are not transmitted."
+    } else {
+      "Ollama and OpenAI Premium are processing the same structured digest for a controlled comparison. Raw uploaded files are not transmitted."
+    }
+  )
+  bundle <- build_rule_interpretation_bundle(exchanges, reason)
+  bundle$source <- state
+  bundle$model <- models
+  bundle$provider <- settings$provider
   bundle$source_label <- interpretation_display_label(bundle)
   bundle
 }
@@ -741,7 +804,7 @@ persist_completed_interpretation <- function(
   on.exit(if (file.exists(temporary_path)) unlink(temporary_path, force = TRUE), add = TRUE)
 
   saveRDS(
-    list(version = 1L, cache_key = cache_key, bundle = bundle),
+    list(version = 3L, cache_key = cache_key, bundle = bundle),
     temporary_path
   )
   published <- file.rename(temporary_path, path)
@@ -759,7 +822,7 @@ read_completed_interpretation <- function(
   cached <- tryCatch(readRDS(path), error = function(error) NULL)
   if (
     !is.list(cached) ||
-      !identical(cached$version, 1L) ||
+      !identical(cached$version, 3L) ||
       !identical(cached$cache_key, cache_key) ||
       !is_terminal_interpretation_bundle(cached$bundle)
   ) {
@@ -774,32 +837,93 @@ interpretation_bundle_for_report <- function(bundle) {
     bundle$exchanges %or_else% list(),
     paste(
       "The report uses the complete deterministic interpretation because",
-      "local generation had not reached a terminal state when it was exported."
+      "model generation had not reached a terminal state when it was exported. No provisional AI text is included."
     )
   )
 }
 
 interpretation_source_ui <- function(bundle) {
   running <- bundle$source %in% c("loading", "generating", "pending")
-  local_model <- running || bundle$source %in% c(
+  local_model <- bundle$source %in% c(
     "ollama",
     "ollama_timeout",
     "ollama_unavailable",
     "ollama_error"
   )
-  div(
+  shiny::div(
     class = paste("interpretation-source", paste0("interpretation-source-", bundle$source)),
-    span(interpretation_source_badge(bundle)),
-    strong(interpretation_display_label(bundle)),
+    shiny::span(interpretation_source_badge(bundle)),
+    shiny::strong(interpretation_display_label(bundle)),
     if (!is.null(bundle$model)) {
-      tags$small(if (local_model) {
+      shiny::tags$small(if (running) {
+        paste(bundle$model, if (identical(bundle$provider, "ollama")) "· Running locally" else "· Processing selected provider mode")
+      } else if (local_model) {
         paste(
           bundle$model,
-          if (running) "· Running locally" else if (identical(bundle$source, "ollama")) "· Generated locally" else "· Local attempt ended"
+          if (identical(bundle$source, "ollama")) "· Generated locally" else "· Local attempt ended"
         )
+      } else if (bundle$source %in% c("openai", "comparison")) {
+        paste(bundle$model, if (identical(bundle$source, "openai")) "· External API · store=false" else "· Controlled provider comparison")
       } else bundle$model)
     },
-    p(bundle$reason)
+    shiny::p(bundle$reason)
+  )
+}
+
+provider_comparison_agent_ui <- function(bundle, agent_id) {
+  comparison <- bundle$comparison
+  if (is.null(comparison) || is.null(comparison$ollama) || is.null(comparison$openai)) return(NULL)
+  provider_card <- function(provider_bundle, label, premium = FALSE) {
+    entry <- provider_bundle$agents[[agent_id]] %or_else% list()
+    provider_complete <- provider_bundle$source %in% c("ollama", "openai")
+    summary <- if (provider_complete) {
+      as.character(entry$summary %or_else% "The provider completed without a displayable agent summary.")
+    } else {
+      paste(
+        label,
+        "did not generate model-authored prose.",
+        as.character(provider_bundle$reason %or_else% "The deterministic scientific summary remains available.")
+      )
+    }
+    usage <- provider_bundle$usage %or_else% list()
+    tokens <- suppressWarnings(as.numeric(usage$total_tokens %or_else% NA_real_))
+    cost <- suppressWarnings(as.numeric(provider_bundle$estimated_cost_usd %or_else% NA_real_))
+    shiny::div(
+      class = paste("provider-comparison-card", if (premium) "provider-comparison-premium" else "provider-comparison-local"),
+      shiny::div(
+        class = "provider-comparison-heading",
+        shiny::span(if (premium) "PREMIUM" else "LOCAL"),
+        shiny::strong(label),
+        shiny::tags$small(provider_bundle$model %or_else% "Computed summary")
+      ),
+      shiny::div(
+        class = "provider-comparison-metrics",
+        shiny::span(paste(interpretation_word_count(summary), "words")),
+        if (is.finite(provider_bundle$elapsed_seconds %or_else% NA_real_)) shiny::span(paste0(round(provider_bundle$elapsed_seconds, 1), " s")) else NULL,
+        if (is.finite(tokens)) shiny::span(paste(format(tokens, big.mark = ","), "tokens")) else NULL,
+        if (is.finite(cost)) shiny::span(paste0("~$", format(cost, digits = 3, nsmall = 3), " USD")) else NULL
+      ),
+      shiny::p(summary),
+      shiny::tags$small(
+        class = "provider-grounding-note",
+        if (provider_complete) {
+          "Named findings and observed-result bullets remain deterministic and use the same result digest in both modes."
+        } else {
+          paste("Provider state:", interpretation_source_badge(provider_bundle), "· No fallback text is presented as provider output.")
+        }
+      )
+    )
+  }
+  shiny::tags$details(
+    class = "provider-comparison-shell",
+    open = "open",
+    shiny::tags$summary("Ollama vs OpenAI · controlled interpretation comparison"),
+    shiny::div(
+      class = "provider-comparison-grid",
+      provider_card(comparison$ollama, "Ollama", premium = FALSE),
+      provider_card(comparison$openai, "OpenAI", premium = TRUE)
+    ),
+    shiny::p(class = "provider-comparison-disclaimer", paste("Primary report narrative:", toupper(comparison$primary_provider %or_else% "computed"), "· Longer prose is not automatically more scientifically correct."))
   )
 }
 
@@ -815,9 +939,9 @@ build_agent_interpretation <- function(agent_id, data, entry = NULL, bundle = NU
 
   if (is.null(data) || nrow(data) == 0L) {
     return(
-      tagList(
+      shiny::tagList(
         interpretation_source_ui(bundle),
-        tags$p(
+        shiny::tags$p(
           class = "interpretation-empty",
           paste(
             "No significant result rows are available for this agent.",
@@ -828,57 +952,137 @@ build_agent_interpretation <- function(agent_id, data, entry = NULL, bundle = NU
     )
   }
 
-  evidence_items <- lapply(entry$evidence %or_else% character(), tags$li)
-  limitation_items <- lapply(entry$limitations %or_else% character(), tags$li)
+  evidence_items <- lapply(entry$observed_results %or_else% entry$evidence %or_else% character(), shiny::tags$li)
+  key_findings <- lapply(entry$key_findings %or_else% character(), shiny::tags$li)
 
-  tagList(
-    interpretation_source_ui(bundle),
-    div(
+  observed_layer <- shiny::tags$details(
+    class = "interpretation-details interpretation-observed-results",
+    open = "open",
+    shiny::tags$summary("Observed results · deterministic"),
+    shiny::div(
       class = "interpretation-section",
-      h4("Biological summary"),
-      p(entry$summary)
-    ),
-    tags$details(
-      class = "interpretation-details",
-      tags$summary("Full-result evidence"),
-      div(
-      class = "interpretation-section",
-      h4("Coverage and distributions"),
-      tags$ul(evidence_items)
-      )
-    ),
-    div(
-      class = "interpretation-section",
-      h4("Cancer relevance"),
-      p(entry$cancer_relevance)
-    ),
-    tags$details(
-      class = "interpretation-details interpretation-limitations",
-      tags$summary("Confidence and limitations"),
-      div(class = "interpretation-section", tags$ul(limitation_items))
+      shiny::p("Computed from the complete saved result table; local AI cannot alter these observations."),
+      shiny::tags$ul(evidence_items)
     )
+  )
+
+  if (is_interpretation_progress_bundle(bundle)) {
+    return(shiny::tagList(
+      interpretation_source_ui(bundle),
+      observed_layer,
+      shiny::div(
+        class = "interpretation-loading-card",
+        shiny::div(class = "interpretation-loading-orbit", "AI"),
+        shiny::div(
+          shiny::h4("Building the integrated interpretation"),
+          shiny::p("Reviewing all result rows, checking grounding, and organizing one integrated biological account. No provisional computed narrative is shown while generation is active.")
+        )
+      )
+    ))
+  }
+
+  shiny::tagList(
+    interpretation_source_ui(bundle),
+    provider_comparison_agent_ui(bundle, agent_id),
+    observed_layer,
+    shiny::div(
+      class = "interpretation-section interpretation-biological-context",
+      shiny::h4("Integrated biological interpretation"),
+      shiny::p(entry$summary),
+      if (length(key_findings)) shiny::tagList(shiny::h4("Key findings"), shiny::tags$ul(key_findings)) else NULL,
+      shiny::h4("Biological context"),
+      shiny::p(entry$biological_context %or_else% "Additional biological context is not available.")
+    ),
+    shiny::div(
+      class = "interpretation-section",
+      shiny::h4("Cancer relevance"),
+      shiny::p(entry$cancer_relevance)
+    )
+  )
+}
+
+deep_narrative_ui <- function(value) {
+  lines <- strsplit(as.character(value %or_else% ""), "\\r?\\n", perl = TRUE)[[1L]]
+  lines <- lines[nzchar(trimws(lines))]
+  suppress_section <- FALSE
+  rendered <- lapply(lines, function(line) {
+    text <- trimws(gsub("\\*\\*", "", line, perl = TRUE))
+    known_sections <- c(
+      "integrated biological interpretation", "evidence convergence and distinctions",
+      "candidate regulatory and network model", "result-grounded research hypotheses",
+      "testable hypotheses", "validation and next analyses", "recommended next analyses",
+      "interpretation limits", "interpretive limits", "interpretive boundaries"
+    )
+    heading <- grepl("^\\s*\\*\\*.*\\*\\*\\s*$", line, perl = TRUE) || tolower(text) %in% known_sections
+    if (heading) {
+      suppress_section <<- tolower(text) %in% c(
+        "result-grounded research hypotheses", "testable hypotheses",
+        "validation and next analyses", "recommended next analyses",
+        "interpretation limits", "interpretive limits", "interpretive boundaries"
+      )
+      if (suppress_section) return(NULL)
+    } else if (suppress_section) {
+      return(NULL)
+    }
+    if (heading) return(shiny::h4(text))
+    if (grepl("^[0-9]+\\.\\s+", text, perl = TRUE)) return(shiny::div(class = "deep-narrative-item", text))
+    if (grepl("^[*+-]\\s+", text, perl = TRUE)) return(shiny::div(class = "deep-narrative-subitem", sub("^[*+-]\\s+", "", text, perl = TRUE)))
+    shiny::p(text)
+  })
+  shiny::tagList(Filter(Negate(is.null), rendered))
+}
+
+consolidated_hypothesis_ui <- function(synthesis) {
+  convergences <- utils::head(as.character(synthesis$convergences %or_else% character()), 3L)
+  hubs <- utils::head(as.character(synthesis$hub_candidates %or_else% character()), 3L)
+  signals <- if (length(convergences)) paste(convergences, collapse = "; ") else "the recurring enriched programs"
+  anchors <- if (length(hubs)) paste(hubs, collapse = ", ") else "the highest-ranked network hubs"
+  shiny::div(
+    class = "cross-agent-hypothesis",
+    shiny::h4("One consolidated result-grounded hypothesis"),
+    shiny::p(paste0(
+      "Working hypothesis: the recurring signals (", signals,
+      ") define a coordinated gene program in which ", anchors,
+      " are candidate network anchors. Test this single model in an independent biological contrast using targeted perturbation or orthogonal protein/RNA measurements, with prespecified positive and negative controls."
+    )),
+    shiny::tags$small("This is a result-grounded hypothesis for validation, not a causal or clinical conclusion.")
   )
 }
 
 build_cross_agent_synthesis_ui <- function(bundle) {
   synthesis <- bundle$synthesis
+  if (is_interpretation_progress_bundle(bundle)) {
+    return(div(
+      class = "cross-agent-content",
+      interpretation_source_ui(bundle),
+      div(class = "interpretation-loading-card", h4("Integrating evidence across agents"), p("The local model is completing groundedness checks and cross-agent synthesis."))
+    ))
+  }
   convergences <- lapply(synthesis$convergences %or_else% character(), tags$li)
-  limitations <- lapply(synthesis$limitations %or_else% character(), tags$li)
+  hubs <- lapply(synthesis$hub_candidates %or_else% character(), tags$li)
   bridge_available <- isTRUE(synthesis$bridge$available)
 
   div(
     class = "cross-agent-content",
     interpretation_source_ui(bundle),
-    div(class = "cross-agent-summary", p(synthesis$summary)),
+    div(class = "cross-agent-summary", h3(synthesis$title %or_else% "Integrated interpretation"), p(synthesis$summary)),
+    div(
+      class = "cross-agent-narrative",
+      h4(if (!is.null(synthesis$deep_narrative)) "Deep integrated interpretation" else "Integrated biological model"),
+      div(class = "deep-narrative-text", deep_narrative_ui(synthesis$deep_narrative %or_else% synthesis$integrated_interpretation %or_else% synthesis$summary))
+    ),
     div(
       class = "cross-agent-grid",
       div(h4("Convergent signals"), tags$ul(convergences)),
+      div(h4("Candidate regulatory network"), p(synthesis$regulatory_network)),
+      div(h4("Hub candidates"), tags$ul(hubs)),
       div(
         class = if (bridge_available) "drug-pathway-bridge bridge-ready" else "drug-pathway-bridge",
         h4("Drug ↔ pathway exchange"),
         p(synthesis$drug_pathway_context)
       ),
-      div(h4("Interpretation limits"), tags$ul(limitations))
+      div(h4("Novelty and literature context"), p(synthesis$novelty_context)),
+      consolidated_hypothesis_ui(synthesis)
     )
   )
 }
@@ -911,8 +1115,15 @@ start_local_interpretation_job <- function(data_by_agent, settings) {
     cleanup_tree = TRUE
   )
 
+  settings <- normalise_interpretation_settings(settings)
   started_at <- Sys.time()
-  watchdog_grace_seconds <- min(5, max(1, settings$timeout_seconds * 0.05))
+  timeout_budget <- switch(
+    settings$provider,
+    openai = settings$openai_timeout_seconds * 2,
+    compare = settings$timeout_seconds * 2 + settings$openai_timeout_seconds * 2,
+    settings$timeout_seconds * 2
+  )
+  watchdog_grace_seconds <- min(10, max(2, timeout_budget * 0.02))
 
   list(
     process = process,
@@ -922,7 +1133,9 @@ start_local_interpretation_job <- function(data_by_agent, settings) {
     stderr_path = stderr_path,
     settings = settings,
     started_at = started_at,
-    deadline_at = started_at + settings$timeout_seconds + watchdog_grace_seconds
+    # One bounded revision pass may be requested when the first structured
+    # draft is valid but underdeveloped.
+    deadline_at = started_at + timeout_budget + watchdog_grace_seconds
   )
 }
 
@@ -960,6 +1173,7 @@ register_results_server <- function(
   active_agents = NULL,
   analysis_complete = NULL,
   ollama_settings = NULL,
+  run_context = NULL,
   interpretation_job_factory = start_local_interpretation_job,
   interpretation_cache_path = completed_interpretation_cache_path
 ) {
@@ -1033,7 +1247,7 @@ register_results_server <- function(
     } else {
       ollama_settings()
     }
-    settings <- normalise_ollama_settings(settings)
+    settings <- normalise_interpretation_settings(settings)
 
     run_is_complete <- if (is.null(analysis_complete)) TRUE else isTRUE(analysis_complete())
     csv_paths <- vapply(keys, function(key) result_files[[key]]$csv, character(1))
@@ -1044,10 +1258,18 @@ register_results_server <- function(
       information$size,
       as.numeric(information$mtime),
       settings$enabled,
+      settings$provider,
       settings$host,
       settings$model,
       settings$timeout_seconds,
       settings$num_predict,
+      settings$openai_model,
+      settings$openai_reasoning_effort,
+      settings$openai_timeout_seconds,
+      settings$openai_max_output_tokens,
+      settings$openai_data_consent,
+      settings$openai_key_available,
+      interpretation_contract_version,
       run_is_complete,
       collapse = "|"
     )
@@ -1069,7 +1291,7 @@ register_results_server <- function(
       publish_interpretation(
         build_rule_interpretation_bundle(
           exchanges,
-          "Scientific workers are still running. Local interpretation starts automatically when the selected analyses finish."
+          "Scientific workers are still running. The selected interpretation mode starts automatically when the analyses finish."
         ),
         cache_key
       )
@@ -1086,26 +1308,30 @@ register_results_server <- function(
       publish_interpretation(
         build_rule_interpretation_bundle(
           exchanges,
-          "Local Ollama is disabled; the deterministic full-result summary is shown."
+          "AI interpretation is disabled; the deterministic full-result summary is shown."
         ),
         cache_key
       )
       return()
     }
 
-    validation_error <- validate_ollama_settings(settings)
+    validation_error <- validate_interpretation_settings(settings)
     if (!is.null(validation_error)) {
-      publish_interpretation(
-        build_rule_interpretation_bundle(exchanges, paste("Local Ollama was not started:", validation_error)),
-        cache_key
+      bundle <- build_provider_failure_bundle(
+        exchanges,
+        simpleError(validation_error),
+        settings,
+        reason = paste("The selected interpretation mode was not started:", validation_error)
       )
+      persist_completed_interpretation(cache_key, bundle, interpretation_cache_path)
+      publish_interpretation(bundle, cache_key)
       return()
     }
 
-    loading <- build_ollama_progress_bundle(
+    loading <- build_provider_progress_bundle(
       exchanges,
       state = "loading",
-      model = settings$model
+      settings = settings
     )
     publish_interpretation(loading, cache_key)
 
@@ -1116,7 +1342,7 @@ register_results_server <- function(
         job
       },
       error = function(error) {
-        fallback <- build_ollama_failure_bundle(exchanges, error, settings)
+        fallback <- build_provider_failure_bundle(exchanges, error, settings)
         persist_completed_interpretation(cache_key, fallback, interpretation_cache_path)
         publish_interpretation(fallback, cache_key)
         NULL
@@ -1144,12 +1370,12 @@ register_results_server <- function(
     if (is_alive) {
       current <- interpretation_cache$value
       if (local_interpretation_job_expired(job)) {
-        timeout_error <- simpleError("Local interpretation timed out at the configured time limit.")
-        bundle <- build_ollama_failure_bundle(
+        timeout_error <- simpleError("Interpretation timed out at the configured time limit.")
+        bundle <- build_provider_failure_bundle(
           current$exchanges %or_else% list(),
           timeout_error,
           job$settings,
-          source = "ollama_timeout"
+          source = if (identical(job$settings$provider, "openai")) "openai_timeout" else if (identical(job$settings$provider, "compare")) "comparison_timeout" else "ollama_timeout"
         )
         completed_key <- job$key
         cleanup_local_interpretation_job(job, terminate = TRUE)
@@ -1164,10 +1390,10 @@ register_results_server <- function(
         identical(job$key, interpretation_cache$key) &&
         identical(current$source, "loading")
       ) {
-        generating <- build_ollama_progress_bundle(
+        generating <- build_provider_progress_bundle(
           current$exchanges %or_else% list(),
           state = "generating",
-          model = current$model
+          settings = job$settings
         )
         publish_interpretation(generating, job$key)
       }
@@ -1177,12 +1403,12 @@ register_results_server <- function(
     if (is.null(bundle)) {
       current <- interpretation_cache$value
       exchanges <- current$exchanges %or_else% list()
-      bundle <- build_ollama_failure_bundle(
+      bundle <- build_provider_failure_bundle(
         exchanges,
         simpleError("The background local-model process ended without a valid response."),
         job$settings,
-        source = "ollama_error",
-        reason = "The background local-model process ended without a valid response. Scientific results remain available with the safe rule-based summary."
+        source = if (identical(job$settings$provider, "openai")) "openai_error" else if (identical(job$settings$provider, "compare")) "comparison_error" else "ollama_error",
+        reason = "The background interpretation process ended without a valid response. Scientific results remain available with the computed scientific summary."
       )
     }
 
@@ -1263,7 +1489,8 @@ register_results_server <- function(
     content = function(file) {
       finalize_interpretation_job()
       current <- interpretation_cache$value %or_else% interpretation_bundle()
-      build_combined_html_report(file, current, active_keys())
+      context <- if (is.null(run_context)) list() else run_context()
+      build_combined_html_report(file, current, active_keys(), run_context = context)
     },
     contentType = "text/html"
   )
@@ -1275,7 +1502,8 @@ register_results_server <- function(
     content = function(file) {
       finalize_interpretation_job()
       current <- interpretation_cache$value %or_else% interpretation_bundle()
-      create_results_bundle(file, current, active_keys())
+      context <- if (is.null(run_context)) list() else run_context()
+      create_results_bundle(file, current, active_keys(), run_context = context)
     },
     contentType = "application/zip"
   )
@@ -1287,34 +1515,45 @@ register_results_server <- function(
       csv_path <- result_files[[key]]$csv
       plot_path <- result_files[[key]]$plot
 
+      visual_summary <- reactive({
+        result_signature()
+        result_visual_summary(safe_result_csv(csv_path), key)
+      })
+
+      visual_interactions <- reactive({
+        result_signature()
+        if (!identical(key, "string")) return(NULL)
+        safe_result_csv(result_files$string$interactions)
+      })
+
+      output[[paste0(key, "_interactive_bar")]] <- plotly::renderPlotly({
+        professional_bar_plot(visual_summary(), paste(title, "evidence profile"))
+      })
+
+      if (identical(key, "string")) {
+        output[[paste0(key, "_interactive_3d")]] <- plotly::renderPlotly({
+          evidence_3d_plot(visual_summary(), title, visual_interactions())
+        })
+
+        output[[paste0(key, "_network_guide")]] <- renderUI({
+          string_network_guide_ui(visual_summary(), visual_interactions())
+        })
+      }
+
+      output[[paste0(key, "_interactive_bar_modal")]] <- plotly::renderPlotly({
+        professional_bar_plot(visual_summary(), paste(title, "evidence profile"))
+      })
+
       observeEvent(input[[paste0("open_plot_", key)]], {
-        if (!is_existing_result_file(plot_path)) {
+        if (is.null(visual_summary())) {
           showNotification(paste(title, "visualization is not available yet."), type = "warning")
           return()
         }
 
-        relative_plot_path <- sub(
-          paste0("^", analysis_output_root, "/?"),
-          "",
-          plot_path
-        )
-
-        plot_source <- image_data_uri(plot_path)
-        if (is.null(plot_source)) {
-          plot_source <- paste0(
-            "analysis-output/", relative_plot_path,
-            "?v=", plot_cache_token(plot_path)
-          )
-        }
-
         showModal(
           modalDialog(
-            title = paste(title, "Visualization"),
-            tags$img(
-              src = plot_source,
-              alt = paste(title, "analysis visualization"),
-              class = "result-modal-image"
-            ),
+            title = paste(title, "interactive evidence profile"),
+            plotly::plotlyOutput(paste0(key, "_interactive_bar_modal"), height = "70vh"),
             size = "l",
             easyClose = TRUE,
             footer = modalButton("Close")
@@ -1367,9 +1606,14 @@ register_results_server <- function(
       })
 
       output[[paste0(key, "_result_plot")]] <- renderUI({
-    result_signature()
-        if (!is_existing_result_file(plot_path)) {
+        result_signature()
+        summary <- visual_summary()
+        if (is.null(summary) || !requireNamespace("plotly", quietly = TRUE)) {
           result_data <- safe_result_csv(csv_path)
+          if (is_existing_result_file(plot_path)) {
+            plot_source <- image_data_uri(plot_path)
+            if (!is.null(plot_source)) return(tags$img(src = plot_source, alt = paste(title, "analysis visualization"), class = "result-plot-image"))
+          }
           message_text <- if (file.exists(csv_path) && nrow(result_data) == 0L) {
             paste(
               title, "completed successfully, but no statistically significant",
@@ -1391,46 +1635,40 @@ register_results_server <- function(
           )
         }
 
-        relative_plot_path <- sub(
-          paste0("^", analysis_output_root, "/?"),
-          "",
-          plot_path
-        )
+        bar_view <- plotly::plotlyOutput(paste0(key, "_interactive_bar"), height = "470px")
+        if (!identical(key, "string")) return(bar_view)
 
-        plot_source <- image_data_uri(plot_path)
-        if (is.null(plot_source)) {
-          plot_source <- paste0(
-            "analysis-output/", relative_plot_path,
-            "?v=", plot_cache_token(plot_path)
-          )
+        network <- evidence_3d_plot(summary, title, visual_interactions())
+        if (is.null(network)) {
+          return(tagList(
+            bar_view,
+            div(
+              class = "result-empty-state string-network-unavailable",
+              h4("Connected STRING network unavailable"),
+              p("No retrieved interaction edges connected the displayed hub proteins. The bar view and full CSV remain available; no artificial rank-order lines were drawn.")
+            )
+          ))
         }
 
-        tags$img(
-          src = plot_source,
-          alt = paste(title, "analysis visualization"),
-          class = "result-plot-image"
-        )
-      })
-
-      output[[paste0(key, "_result_table")]] <- renderDT({
-    result_signature()
-        result_data <- safe_result_csv(csv_path)
-
-        validate(
-          need(
-            file.exists(csv_path),
-            paste(title, "result file was not found.")
-          ),
-          need(
-            nrow(result_data) > 0,
-            paste(
-              title,
-              "completed but returned no significant result rows."
-            )
+        tabsetPanel(
+          type = "pills",
+          tabPanel("Professional bar view", bar_view),
+          tabPanel(
+            "3D interaction network",
+            div(
+              class = "string-app-network-layout",
+              div(
+                class = "string-app-network-chart",
+                p(
+                  class = "visualization-method-note",
+                  "Drag to rotate and scroll to zoom. Balls are hub proteins; lines are retrieved STRING associations."
+                ),
+                plotly::plotlyOutput(paste0(key, "_interactive_3d"), height = "540px")
+              ),
+              uiOutput(paste0(key, "_network_guide"))
+            ),
           )
         )
-
-        result_datatable(result_data)
       })
 
       output[[paste0("download_", key)]] <- downloadHandler(

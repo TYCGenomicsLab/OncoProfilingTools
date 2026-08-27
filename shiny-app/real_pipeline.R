@@ -83,7 +83,9 @@ create_real_analysis_run <- function(data) {
 start_real_agent_worker <- function(
   agent,
   analysis_run,
-  pvalue_cutoff = 0.05
+  pvalue_cutoff = 0.05,
+  effect_cutoff = 1,
+  max_genes = 2000L
 ) {
   agent <- tolower(agent)
 
@@ -107,7 +109,9 @@ start_real_agent_worker <- function(
       agent,
       analysis_run$input_file,
       result_file,
-      as.character(pvalue_cutoff)
+      as.character(pvalue_cutoff),
+      as.character(effect_cutoff),
+      as.character(max_genes)
     ),
     stdout = log_file,
     stderr = "2>&1",

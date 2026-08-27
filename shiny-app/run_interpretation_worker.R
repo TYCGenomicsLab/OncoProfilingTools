@@ -9,7 +9,7 @@ helper_path <- normalizePath(args[[3L]], mustWork = TRUE)
 
 source(helper_path, local = TRUE)
 payload <- readRDS(input_path)
-bundle <- generate_interpretation_bundle(payload$data_by_agent, payload$settings)
+bundle <- generate_provider_interpretation_bundle(payload$data_by_agent, payload$settings)
 
 temporary_output <- paste0(output_path, ".tmp")
 saveRDS(bundle, temporary_output)

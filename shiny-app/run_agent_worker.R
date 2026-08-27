@@ -1,7 +1,7 @@
 # Background worker for one OncoProfiling analysis agent.
 #
 # Command:
-# Rscript run_agent_worker.R AGENT INPUT_RDS RESULT_RDS PVALUE_CUTOFF
+# Rscript run_agent_worker.R AGENT INPUT_RDS RESULT_RDS PVALUE_CUTOFF EFFECT_CUTOFF MAX_GENES
 
 `%||%` <- function(value, fallback) {
   if (is.null(value) || length(value) == 0) {
@@ -18,7 +18,7 @@ if (length(args) < 3) {
     paste(
       "Usage:",
       "Rscript run_agent_worker.R",
-      "AGENT INPUT_RDS RESULT_RDS [PVALUE_CUTOFF]"
+      "AGENT INPUT_RDS RESULT_RDS [PVALUE_CUTOFF] [EFFECT_CUTOFF] [MAX_GENES]"
     ),
     call. = FALSE
   )
@@ -41,6 +41,12 @@ if (
 ) {
   pvalue_cutoff <- 0.05
 }
+
+effect_cutoff <- if (length(args) >= 5) suppressWarnings(as.numeric(args[[5]])) else 1
+if (!is.finite(effect_cutoff) || effect_cutoff < 0) effect_cutoff <- 1
+
+max_genes <- if (length(args) >= 6) suppressWarnings(as.integer(args[[6]])) else 2000L
+if (is.na(max_genes) || max_genes < 2L || max_genes > 10000L) max_genes <- 2000L
 
 all_args <- commandArgs(trailingOnly = FALSE)
 
@@ -113,7 +119,9 @@ worker_result <- tryCatch(
     result <- run_selected_real_agent(
       agent = agent_name,
       data = input_data,
-      pvalue_cutoff = pvalue_cutoff
+      pvalue_cutoff = pvalue_cutoff,
+      effect_cutoff = effect_cutoff,
+      max_genes = max_genes
     )
 
     result$started_at <- started_at

@@ -4,7 +4,16 @@
 \alias{run_kegg_agent}
 \title{Run KEGG enrichment agent}
 \usage{
-run_kegg_agent(genes, organism = "hsa", pvalue_cutoff = 0.05)
+run_kegg_agent(
+  genes,
+  organism = "hsa",
+  pvalue_cutoff = 0.05,
+  max_attempts = 3L,
+  retry_delay_seconds = 2,
+  request_timeout_seconds = 180,
+  enrich_fn = NULL,
+  sleep_fn = Sys.sleep
+)
 }
 \arguments{
 \item{genes}{Character vector of gene symbols.}
@@ -12,6 +21,18 @@ run_kegg_agent(genes, organism = "hsa", pvalue_cutoff = 0.05)
 \item{organism}{KEGG organism code. Default is "hsa" for human.}
 
 \item{pvalue_cutoff}{P-value cutoff.}
+
+\item{max_attempts}{Maximum attempts for transient KEGG REST failures.}
+
+\item{retry_delay_seconds}{Initial retry delay; subsequent delays use exponential backoff.}
+
+\item{request_timeout_seconds}{Per-attempt network timeout in seconds. The
+default allows for the comparatively large KEGG pathway-link response.}
+
+\item{enrich_fn}{Enrichment function. Defaults to \code{clusterProfiler::enrichKEGG};
+injectable for deterministic tests.}
+
+\item{sleep_fn}{Delay function. Defaults to \code{Sys.sleep}; injectable for tests.}
 }
 \value{
 A list containing KEGG results, mapped genes, and summary.

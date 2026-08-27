@@ -85,7 +85,7 @@ testthat::test_that("combined report covers all selected agents", {
   testthat::expect_match(report, "Hallmark Analysis", fixed = TRUE)
   testthat::expect_match(report, "Immune Deconvolution Analysis", fixed = TRUE)
   testthat::expect_match(report, "Drug Sensitivity Analysis", fixed = TRUE)
-  testthat::expect_match(report, "Cross-agent synthesis", fixed = TRUE)
+  testthat::expect_match(report, "IAN-STYLE INTEGRATED REVIEW", fixed = TRUE)
 })
 
 testthat::test_that("Ollama loading, generating, completion, and error copy is explicit", {
@@ -130,8 +130,8 @@ testthat::test_that("Ollama loading, generating, completion, and error copy is e
   testthat::expect_identical(interpretation_status_label(unavailable), "OLLAMA UNAVAILABLE")
 
   fallback <- build_rule_interpretation_bundle(exchanges)
-  testthat::expect_identical(interpretation_source_badge(fallback), "SAFE FALLBACK")
-  testthat::expect_identical(interpretation_status_label(fallback), "Rule summary active")
+  testthat::expect_identical(interpretation_source_badge(fallback), "COMPUTED SUMMARY")
+  testthat::expect_identical(interpretation_status_label(fallback), "COMPUTED SUMMARY")
 })
 
 testthat::test_that("completed interpretations persist only for the matching run", {
@@ -150,6 +150,31 @@ testthat::test_that("completed interpretations persist only for the matching run
 
   progress <- build_ollama_progress_bundle(exchanges, "generating", "test-model")
   testthat::expect_false(persist_completed_interpretation("run-a", progress, cache_file))
+})
+
+testthat::test_that("agent interpretation renders the richer biological context", {
+  exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  bundle <- build_rule_interpretation_bundle(exchanges)
+  entry <- bundle$agents$go
+  entry$biological_context <- "This is the distinct, expanded biological explanation."
+  rendered <- as.character(build_agent_interpretation("go", data.frame(Description = "DNA repair"), entry, bundle))
+
+  testthat::expect_match(rendered, "Integrated biological interpretation", fixed = TRUE)
+  testthat::expect_false(grepl("Recommended validation priorities", rendered, fixed = TRUE))
+  testthat::expect_false(grepl("Result-grounded research hypotheses", rendered, fixed = TRUE))
+  testthat::expect_false(grepl("Confidence and limitations", rendered, fixed = TRUE))
+  testthat::expect_match(rendered, "distinct, expanded biological explanation", fixed = TRUE)
+  testthat::expect_match(rendered, 'open="open"', fixed = TRUE)
+})
+
+testthat::test_that("Results Center reserves 3D interaction UI for STRING", {
+  tab_source <- paste(deparse(body(result_tab_ui)), collapse = "\n")
+  helper_source <- paste(readLines(file.path(app_project_root, "shiny-app", "results_helpers.R"), warn = FALSE), collapse = "\n")
+
+  testthat::expect_match(tab_source, 'identical(key, "string")', fixed = TRUE)
+  testthat::expect_match(tab_source, "connected 3D network", fixed = TRUE)
+  testthat::expect_false(grepl("result-table-panel", tab_source, fixed = TRUE))
+  testthat::expect_false(grepl("Connected 3D rank profile", helper_source, fixed = TRUE))
 })
 
 testthat::test_that("the parent watchdog recognizes a hung interpretation worker", {
@@ -218,7 +243,7 @@ testthat::test_that("completed Ollama reports never retain stale progress wordin
   testthat::expect_false(grepl("Local interpretation in progress", report, fixed = TRUE))
 })
 
-testthat::test_that("reports exported during generation contain a terminal rule summary", {
+testthat::test_that("reports exported during generation contain a terminal computed summary", {
   report_file <- tempfile(fileext = ".html")
   on.exit(unlink(report_file), add = TRUE)
   exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
@@ -231,6 +256,6 @@ testthat::test_that("reports exported during generation contain a terminal rule 
   )
   report <- paste(readLines(report_file, warn = FALSE), collapse = "\n")
 
-  testthat::expect_match(report, "Rule-based fallback", fixed = TRUE)
+  testthat::expect_match(report, "Computed scientific summary", fixed = TRUE)
   testthat::expect_false(grepl("OLLAMA GENERATING|Analyzing full result table|Local interpretation in progress", report))
 })

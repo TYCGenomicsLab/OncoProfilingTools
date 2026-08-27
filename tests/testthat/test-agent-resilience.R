@@ -73,6 +73,48 @@ testthat::test_that("ChEA never saves an expired payload as science", {
   )
 })
 
+testthat::test_that("KEGG retries transient REST failures with bounded backoff", {
+  attempts <- 0L
+  delays <- numeric()
+  mock_enrichment <- function(...) {
+    attempts <<- attempts + 1L
+    if (attempts < 3L) stop("cannot read from connection", call. = FALSE)
+    structure(list(ok = TRUE), class = "mock_kegg_result")
+  }
+
+  result <- run_kegg_enrichment_with_retry(
+    gene = c("1956", "7157"),
+    max_attempts = 3L,
+    retry_delay_seconds = 1,
+    request_timeout_seconds = 90,
+    enrich_fn = mock_enrichment,
+    sleep_fn = function(seconds) delays <<- c(delays, seconds)
+  )
+
+  testthat::expect_s3_class(result, "mock_kegg_result")
+  testthat::expect_identical(attempts, 3L)
+  testthat::expect_identical(delays, c(1, 2))
+})
+
+testthat::test_that("KEGG does not retry permanent input errors", {
+  attempts <- 0L
+  testthat::expect_error(
+    run_kegg_enrichment_with_retry(
+      gene = "1956",
+      max_attempts = 3L,
+      retry_delay_seconds = 0,
+      enrich_fn = function(...) {
+        attempts <<- attempts + 1L
+        stop("invalid organism code", call. = FALSE)
+      },
+      sleep_fn = function(seconds) NULL
+    ),
+    "after 1 attempt",
+    fixed = TRUE
+  )
+  testthat::expect_identical(attempts, 1L)
+})
+
 testthat::test_that("STRING creates a visualization from network results", {
   plot_file <- tempfile(fileext = ".png")
   on.exit(unlink(plot_file), add = TRUE)
@@ -111,6 +153,29 @@ testthat::test_that("Immune Deconvolution creates a composition heatmap", {
 
   testthat::expect_true(save_immune_composition_plot(result_data, plot_file))
   testthat::expect_true(file.info(plot_file)$size > 1000)
+})
+
+testthat::test_that("Immune heatmap separates residual fraction and retains all 50 samples", {
+  testthat::skip_if_not_installed("ggplot2")
+  sample_names <- paste0("Tumor_", seq_len(50))
+  result_data <- data.frame(
+    cell_type = c("B cell", "Macrophage M1", "T cell CD8+", "uncharacterized cell"),
+    check.names = FALSE
+  )
+  result_data[sample_names] <- rbind(
+    seq(0.01, 0.05, length.out = 50),
+    seq(0.03, 0.12, length.out = 50),
+    seq(0.02, 0.08, length.out = 50),
+    seq(0.90, 0.65, length.out = 50)
+  )
+
+  prepared <- prepare_immune_composition_plot(result_data)
+
+  testthat::expect_identical(prepared$total_samples, 50L)
+  testthat::expect_identical(prepared$displayed_samples, 50L)
+  testthat::expect_false("uncharacterized cell" %in% rownames(prepared$abundance_matrix))
+  testthat::expect_equal(nrow(prepared$abundance_matrix), 3L)
+  testthat::expect_equal(prepared$residual_summary$median, 0.775)
 })
 
 testthat::test_that("Drug Sensitivity creates a ranked response plot", {
