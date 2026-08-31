@@ -1,0 +1,53 @@
+# Package index
+
+## All functions
+
+- [`AssayTypes`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/AssayTypes.md)
+  : An enumeration of supported assay types
+- [`DrugResponseAssay-class`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/DrugResponseAssay-class.md)
+  : DrugResponseAssay S4 class definition
+- [`DrugResponseAssay()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/DrugResponseAssay.md)
+  : Create a DrugResponseAssay object
+- [`ExpressionAssay-class`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/ExpressionAssay-class.md)
+  : ExpressionAssay S4 class definition
+- [`ExpressionAssay()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/ExpressionAssay.md)
+  : Create an ExpressionAssay object
+- [`ModelMetadataFields`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/ModelMetadataFields.md)
+  : ModelMetadataFields
+- [`OncoExperiment-class`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/OncoExperiment-class.md)
+  : OncoExperiment S4 class definition
+- [`OncoExperiment()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/OncoExperiment.md)
+  : Create an empty OncoExperiment object
+- [`ProteinExpressionAssay-class`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/ProteinExpressionAssay-class.md)
+  : ProteinExpressionAssay S4 class definition
+- [`RNAAssay()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/ProteinExpressionAssay.md)
+  : Create a ProteinExpressionAssay object
+- [`SensitivityUnits`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/SensitivityUnits.md)
+  : Drug sensitivity response units LFC = log fold change, AUC = area
+  under the curve, IC50 = half maximal inhibitory concentration
+- [`add_assay(`*`<OncoExperiment>`*`,`*`<SummarizedExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/add_assay-OncoExperiment-SummarizedExperiment-method.md)
+  : Add an assay experiment to an OncoExperiment
+- [`add_assay()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/add_assay.md)
+  : Add an assay to an object
+- [`compare_drug_sensitivities(`*`<OncoExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/compare_drug_sensitivities-OncoExperiment-method.md)
+  : Compare drug sensitivities between two OncoExperiment groups
+- [`compare_drug_sensitivities()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/compare_drug_sensitivities.md)
+  : Compare drug sensitivities between two groups
+- [`export(`*`<DrugSensitivityComparison>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/export-DrugSensitivityComparison-method.md)
+  : Export a \`DrugSensitivityComparison\` object
+- [`load_assays(`*`<OncoExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/load_assays-OncoExperiment-method.md)
+  : Load assay data into an OncoExperiment object
+- [`load_assays()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/load_assays.md)
+  : Load assay data into an OncoExperiment object The function will
+  coerce the assay into the corresponding OncoAssay class before being
+  added to the OncoExperiment object.
+- [`plot_donut(`*`<OncoExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/plot_donut-OncoExperiment-method.md)
+  : Create a donut plot from model metadata
+- [`plot_donut()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/plot_donut.md)
+  : Create a donut plot
+- [`show(`*`<OncoExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/show-OncoExperiment-method.md)
+  : Show an OncoExperiment object
+- [`subset(`*`<OncoExperiment>`*`)`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/subset-OncoExperiment-method.md)
+  : Subset an OncoExperiment
+- [`subset()`](https://tycgenomicslab.github.io/OncoProfilingTools/reference/subset.md)
+  : Subset an OncoExperiment
