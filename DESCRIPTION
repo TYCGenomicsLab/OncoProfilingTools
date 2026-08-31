@@ -24,7 +24,8 @@ Imports:
     SummarizedExperiment,
     MultiAssayExperiment,
     SingleCellExperiment,
-    enumr
+Remotes:
+    ElianHugh/enumr@main
 Suggests:
     roxygen2,
     knitr,
