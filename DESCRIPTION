@@ -23,8 +23,9 @@ Imports:
     S4Vectors,
     SummarizedExperiment,
     MultiAssayExperiment,
-    SingleCellExperiment,
-    enumr
+    SingleCellExperiment
+Remotes:
+    ElianHugh/enumr
 Suggests:
     roxygen2,
     knitr,
