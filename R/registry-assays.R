@@ -84,7 +84,6 @@ get_supported_assays <- function() {
 #' AssayTypes # you can see all supported assays available
 #' AssayTypes$RNA # it's just a string at the end of the day
 #'
-#'
 #' @export
 AssayTypes <- enumr::enum( # nolint
   RNA = "RNA",
