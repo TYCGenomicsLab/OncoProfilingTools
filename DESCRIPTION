@@ -21,9 +21,8 @@ Imports:
     S4Vectors,
     SummarizedExperiment,
     MultiAssayExperiment,
-    SingleCellExperiment
-Remotes:
-    ElianHugh/enumr@main
+    SingleCellExperiment,
+    enumr
 Suggests:
     roxygen2,
     knitr,
@@ -52,8 +51,6 @@ Collate:
     'registry-assays.R'
     'method-load-assays.R'
     'method-load-drug-response-assay.R'
-    'method-load-expression-assay.R'
-    'method-load-mutation-assay.R'
     'method-subset.R'
     'plot-theme.R'
     'plot-donut.R'

@@ -10,6 +10,8 @@
   loader,
   data_path,
   metadata_path = NULL,
+  identifier = NULL,
+  name = NULL,
   ...
 )
 }

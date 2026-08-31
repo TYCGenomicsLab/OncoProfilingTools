@@ -17,7 +17,7 @@ supported_assays <- tibble::tribble(
   ## ---------------------------------------------------
   ## PRISM response assay
   ## ---------------------------------------------------
-  "PRISM", "DrugResponseAssay", "load_drug_response_assay",
+  "DrugResponse", "DrugResponseAssay", "load_drug_response_assay",
 
   ## ---------------------------------------------------
   ## RNA expression assay
@@ -86,5 +86,5 @@ get_supported_assays <- function() {
 #' @export
 AssayTypes <- enumr::enum( # nolint
   RNA = "RNA",
-  PRISM = "PRISM"
+  DrugResponse = "DrugResponse"
 )

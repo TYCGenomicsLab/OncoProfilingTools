@@ -9,6 +9,8 @@
   assay_type = NULL,
   data = NULL,
   metadata = NULL,
+  identifier = NULL,
+  name = NULL,
   overwrite = FALSE,
   ...
 )
@@ -21,6 +23,10 @@
 \item{data}{A character string specifying the path to the data file. This is required.}
 
 \item{metadata}{A character string specifying the path to the metadata file. This is optional but highly recommended.}
+
+\item{identifier}{A character string of the column name where the unique identifier is found that links your data to the metadata. If not supplied, the first column is used.}
+
+\item{name}{A character string of a unique name for this assay. If not supplied and an assay of the same type exists, they will be named sequentially.}
 
 \item{overwrite}{A logical value indicating whether to overwrite an existing
 assay with the same name.}

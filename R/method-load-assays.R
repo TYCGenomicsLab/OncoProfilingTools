@@ -12,6 +12,8 @@ library(methods)
 #' @param assay_type A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.
 #' @param data A character string specifying the path to the data file. This is required.
 #' @param metadata A character string specifying the path to the metadata file. This is optional but highly recommended.
+#' @param identifier A character string of the column name where the unique identifier is found that links your data to the metadata. If not supplied, the first column is used.
+#' @param name A character string of a unique name for this assay. If not supplied and an assay of the same type exists, they will be named sequentially.
 #' @param overwrite A logical value indicating whether to overwrite an existing
 #'   assay with the same name.
 #'
@@ -27,6 +29,8 @@ methods::setMethod(
     assay_type = NULL,
     data = NULL,
     metadata = NULL,
+    identifier = NULL,
+    name = NULL,
     overwrite = FALSE,
     ...
   ) {
@@ -63,6 +67,19 @@ methods::setMethod(
     if (!is.null(metadata)) {
       if (!is.character(metadata) || length(metadata) != 1L || is.na(metadata) || !nzchar(metadata)) {
         stop("`metadata` must be a single non-empty character string.", call. = FALSE)
+      }
+    }
+
+    # TODO: validate identifier column exists and each ID within is unique
+    if (!is.null(identifier)) {
+      if (!is.character(identifier) || length(identifier) != 1L || is.na(identifier) || !nzchar(identifier)) {
+        stop("`identifier` must be a single non-empty character string.", call. = FALSE)
+      }
+    }
+
+    if (!is.null(name)) {
+      if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
+        stop("`name` must be a single non-empty character string.", call. = FALSE)
       }
     }
 
