@@ -9,7 +9,7 @@ library(enumr)
 #'
 #' These are the only files downloaded from DepMap, inferred, and loadable in
 #' their assay-specific classes.
-#'
+#' @noRd
 #' @keywords internal
 supported_assays <- tibble::tribble(
   ~assay_name, ~OncoAssay_class, ~loader,
@@ -30,7 +30,7 @@ supported_assays <- tibble::tribble(
 #' Returns all supported assay types declared in the assay registry.
 #'
 #' @return A character vector of supported assay types.
-#'
+#' @noRd
 #' @export
 get_supported_types <- function() {
   unique(stats::na.omit(supported_assays$assay_name))
@@ -41,7 +41,8 @@ get_supported_types <- function() {
 #' Returns all supported assays in a tribble to be used as a lookup table.
 #'
 #' @return A tribble
-#'
+#' @noRd
+#' @keywords internal
 #' @export
 get_supported_assays <- function() {
   supported_assays
@@ -55,7 +56,7 @@ get_supported_assays <- function() {
 #' @param assay_type Optional character vector of assay types to keep.
 #'
 #' @return A tibble containing loadable assay registry rows.
-#'
+#' @noRd
 #' @keywords internal
 .get_loadable_assay_registry <- function(assay_type = NULL) {
   registry <- supported_assays[
@@ -80,8 +81,9 @@ get_supported_assays <- function() {
 #' Helpful for intelligent code completion and avoiding typos in assay types.
 #'
 #' @examples
-#' AssayTypes$RNA
-#' AssayTypes$PRISM
+#' AssayTypes # you can see all supported assays available
+#' AssayTypes$RNA # it's just a string at the end of the day
+#'
 #'
 #' @export
 AssayTypes <- enumr::enum( # nolint

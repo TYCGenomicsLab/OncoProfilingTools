@@ -36,7 +36,9 @@ load_RNA_assay <- function(
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
-  feature_type = "protein_coding_gene"
+  feature_type = "protein_coding_gene",
+  identifier = NULL,
+  ...
 ) {
   ## ---------------------------------------------------
   ## Validate arguments
@@ -70,6 +72,13 @@ load_RNA_assay <- function(
 
   if (!is.logical(normalized) || length(normalized) != 1L || is.na(normalized)) {
     stop("`normalized` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  if (!is.null(identifier)) {
+    if (!is.character(identifier) || length(identifier) != 1L || is.na(identifier) || !nzchar(identifier)) {
+      stop("`identifier` must be a single non-empty character string.", call. = FALSE)
+    }
+    id_col <- identifier
   }
 
   if (!is.character(id_col) || length(id_col) != 1L || is.na(id_col) || !nzchar(id_col)) {

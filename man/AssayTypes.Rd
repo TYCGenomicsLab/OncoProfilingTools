@@ -10,7 +10,8 @@ AssayTypes
 Helpful for intelligent code completion and avoiding typos in assay types.
 }
 \examples{
-AssayTypes$RNA
-AssayTypes$PRISM
+AssayTypes # you can see all supported assays available
+AssayTypes$RNA # it's just a string at the end of the day
+
 
 }

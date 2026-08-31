@@ -11,7 +11,9 @@ load_RNA_assay(
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
-  feature_type = "protein_coding_gene"
+  feature_type = "protein_coding_gene",
+  identifier = NULL,
+  ...
 )
 }
 \arguments{
