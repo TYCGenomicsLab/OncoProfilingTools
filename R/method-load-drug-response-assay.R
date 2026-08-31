@@ -231,15 +231,15 @@ load_drug_response_assay <- function(
   ## Construct rowData and colData
   ## ---------------------------------------------------
 
-  #treatment_metadata <- .load_prism_compound_metadata(
+  # treatment_metadata <- .load_prism_compound_metadata(
   #  compound_metadata_path = compound_metadata_path,
   #  treatment_ids = treatment_ids
-  #)
+  # )
 
-  #model_metadata <- .load_prism_cell_line_metadata(
+  # model_metadata <- .load_prism_cell_line_metadata(
   #  cell_line_metadata_path = cell_line_metadata_path,
   #  model_ids = model_ids
-  #)
+  # )
 
   # TODO: update to take generic drug response metadata file using same identifier info
   # load in the metadata file
