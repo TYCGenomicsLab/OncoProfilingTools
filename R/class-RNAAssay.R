@@ -27,7 +27,7 @@ library(methods)
 #' @importClassesFrom SummarizedExperiment SummarizedExperiment
 #' @export
 methods::setClass(
-  "ProteinExpressionAssay",
+  "RNAAssay",
   contains = "SummarizedExperiment"
 )
 
@@ -37,29 +37,29 @@ methods::setClass(
 #' `"protein_expression"` with row and column names.
 #' @name internal-ProteinExpressionAssay-validity
 #' @keywords internal
-S4Vectors::setValidity2("ProteinExpressionAssay", function(object) {
+S4Vectors::setValidity2("RNAAssay", function(object) {
   messages <- character()
 
   assay_names <- SummarizedExperiment::assayNames(object)
 
-  if (!"protein_expression" %in% assay_names) {
+  if (!"RNA" %in% assay_names) {
     messages <- c(
       messages,
-      "`ProteinExpressionAssay` must contain an assay named `protein_expression`."
+      "`RNAAssay` must contain an assay named `RNA`."
     )
   }
 
-  if ("protein_expression" %in% assay_names) {
+  if ("RNA" %in% assay_names) {
     expression_data <- SummarizedExperiment::assay(
       object,
-      "protein_expression",
+      "RNA",
       withDimnames = FALSE
     )
 
     if (!is.numeric(expression_data)) {
       messages <- c(
         messages,
-        "`ProteinExpressionAssay` assay `protein_expression` must be numeric."
+        "`RNAAssay` assay `RNA` must be numeric."
       )
     }
   }
@@ -67,14 +67,14 @@ S4Vectors::setValidity2("ProteinExpressionAssay", function(object) {
   if (is.null(rownames(object))) {
     messages <- c(
       messages,
-      "`ProteinExpressionAssay` must have row names for genes/features."
+      "`RNAAssay` must have row names for genes/features."
     )
   }
 
   if (is.null(colnames(object))) {
     messages <- c(
       messages,
-      "`ProteinExpressionAssay` must have column names for samples/models."
+      "`RNAAssay` must have column names for samples/models."
     )
   }
 
@@ -110,12 +110,12 @@ S4Vectors::setValidity2("ProteinExpressionAssay", function(object) {
 #' @return A `ProteinExpressionAssay` object.
 #' @name ProteinExpressionAssay
 #' @export
-ProteinExpressionAssay <- function(
+RNAAssay <- function(
   data,
   rowData = NULL,
   colData = NULL,
   metadata = list(),
-  assay_name = "protein_expression",
+  assay_name = "RNA",
   unit = "log2(TPM+1)",
   normalized = TRUE,
   feature_type = "protein_coding_gene",
@@ -202,14 +202,15 @@ ProteinExpressionAssay <- function(
     )
   )
 
+  assay_slots <- S4Vectors::SimpleList()
+  assay_slots[[assay_name]] <- data
+
   se <- SummarizedExperiment::SummarizedExperiment(
-    assays = S4Vectors::SimpleList(
-      protein_expression = data
-    ),
+    assays = assay_slots,
     rowData = rowData,
     colData = colData,
     metadata = metadata
   )
 
-  methods::as(se, "ProteinExpressionAssay")
+  methods::as(se, "RNAAssay")
 }

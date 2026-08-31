@@ -6,14 +6,16 @@
 The function will coerce the assay into the corresponding OncoAssay class
 before being added to the OncoExperiment object.}
 \usage{
-load_assays(object, assay_type = NULL, path = NULL, ...)
+load_assays(object, assay_type = NULL, data = NULL, metadata = NULL, ...)
 }
 \arguments{
 \item{object}{An OncoExperiment object to which the assay will be added.}
 
-\item{assay_type}{A character string specifying the type of assay being loaded (e.g., "Expression", "PRISM", etc.). This will determine the specific OncoAssay used and correct loading pattern.}
+\item{assay_type}{A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.}
 
-\item{path}{A character string specifying the directory or specific file path where the assay data is located. The function will look for files in this location that match the expected naming conventions for the specified assay type.}
+\item{data}{A character string specifying specific file path where the assay data is located.}
+
+\item{metadata}{A character string specifying the path to the metadata file. This is optional but highly recommended.}
 }
 \value{
 An updated OncoExperiment with loaded assays in the @assays slot.

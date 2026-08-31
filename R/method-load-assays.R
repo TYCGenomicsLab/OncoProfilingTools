@@ -5,20 +5,17 @@ library(methods)
 
 #' Load assay data into an OncoExperiment object
 #'
-#' Loads one or more supported assay files into an `OncoExperiment`.
-#'
-#' The assay type determines which registered loader is used. Each loader returns
-#' an assay object, such as an `ExpressionAssay`, which is then added to the
-#' `OncoExperiment`.
+#' @description This function loads and parses the specified data and metadata files and appends to the @assays
+#' slot of the `OncoExperiment` object. You can view available assay types by printing `AssayTypes`.
 #'
 #' @param object An `OncoExperiment` object to which the assay will be added.
-#' @param assay_type A character vector specifying the assay type(s) being loaded,
-#'   such as `"Expression"` or `"PRISM"`.
-#' @param path A character string specifying the directory or specific file path
-#'   where the assay data is located.
+#' @param assay_type A character string of the type of assay being loaded. Use the `AssayTypes` enum to easily select a valid assay type.
+#' @param data A character string specifying the path to the data file. This is required.
+#' @param metadata A character string specifying the path to the metadata file. This is optional but highly recommended.
+#' @param identifier A character string of the column name where the unique identifier is found that links your data to the metadata. If not supplied, the first column is used.
+#' @param name A character string of a unique name for this assay. If not supplied and an assay of the same type exists, they will be named sequentially.
 #' @param overwrite A logical value indicating whether to overwrite an existing
 #'   assay with the same name.
-#' @param ... Additional arguments passed to assay-specific loader functions.
 #'
 #' @return The updated `OncoExperiment` object.
 #'
@@ -30,7 +27,10 @@ methods::setMethod(
   definition = function(
     object,
     assay_type = NULL,
-    path = ".cache",
+    data = NULL,
+    metadata = NULL,
+    identifier = NULL,
+    name = NULL,
     overwrite = FALSE,
     ...
   ) {
@@ -56,12 +56,31 @@ methods::setMethod(
 
     assay_type <- unique(assay_type)
 
-    if (is.null(path)) {
+    if (is.null(data)) {
       stop("Please specify a path to load the assay data from.", call. = FALSE)
     }
 
-    if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-      stop("`path` must be a single non-empty character string.", call. = FALSE)
+    if (!is.character(data) || length(data) != 1L || is.na(data) || !nzchar(data)) {
+      stop("`data` must be a single non-empty character string.", call. = FALSE)
+    }
+
+    if (!is.null(metadata)) {
+      if (!is.character(metadata) || length(metadata) != 1L || is.na(metadata) || !nzchar(metadata)) {
+        stop("`metadata` must be a single non-empty character string.", call. = FALSE)
+      }
+    }
+
+    # TODO: validate identifier column exists and each ID within is unique
+    if (!is.null(identifier)) {
+      if (!is.character(identifier) || length(identifier) != 1L || is.na(identifier) || !nzchar(identifier)) {
+        stop("`identifier` must be a single non-empty character string.", call. = FALSE)
+      }
+    }
+
+    if (!is.null(name)) {
+      if (!is.character(name) || length(name) != 1L || is.na(name) || !nzchar(name)) {
+        stop("`name` must be a single non-empty character string.", call. = FALSE)
+      }
     }
 
     if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
@@ -72,7 +91,7 @@ methods::setMethod(
     ## Validate that the assay type is loadable
     ## ---------------------------------------------------
 
-    loadable_types <- unique(stats::na.omit(.get_loadable_assay_registry()$assay_type))
+    loadable_types <- unique(stats::na.omit(.get_loadable_assay_registry()$assay_name))
 
     unsupported_types <- setdiff(assay_type, loadable_types)
 
@@ -88,73 +107,53 @@ methods::setMethod(
     }
 
     ## ---------------------------------------------------
-    ## Resolve files to load based on assay type
+    ## Check if the given files exist
     ## ---------------------------------------------------
 
-    if (!file.exists(path)) {
+    if (!file.exists(data)) {
       stop(
         sprintf(
-          "Specified path '%s' does not exist. Run `download_assays()` first or provide `path` manually.",
-          path
+          "Specified data file '%s' does not exist. Please check the file path and try again.",
+          data
         ),
         call. = FALSE
       )
     }
 
-    resolved_files <- .resolve_files_to_load(
-      path = path,
-      assay_type = assay_type
+    if (!is.null(metadata) && !file.exists(metadata)) {
+      stop(
+        sprintf(
+          "Specified metadata file '%s' does not exist. Please check the file path and try again.",
+          metadata
+        ),
+        call. = FALSE
+      )
+    }
+
+    ## ---------------------------------------------------
+    ## Load the file and add it to the object
+    ## ---------------------------------------------------
+
+    # Prepare arguments for loader function by looking up
+    # corresponding values in supported_assays tibble based on assay_type
+    context <- get_supported_assays() %>%
+      dplyr::filter(assay_name == assay_type)
+
+    assay <- .load_assay(
+      assay_type = context$assay_name,
+      OncoAssay_class = context$OncoAssay_class,
+      loader = context$loader,
+      data_path = data,
+      metadata_path = metadata,
+      ...
     )
 
-    if (!inherits(resolved_files, "data.frame") || nrow(resolved_files) == 0L) {
-      stop(
-        "No loadable assay files were resolved.",
-        call. = FALSE
-      )
-    }
-
-    ## ---------------------------------------------------
-    ## Guard against ambiguous duplicate assay types
-    ## ---------------------------------------------------
-
-    duplicated_assay_types <- resolved_files$assay_type[
-      duplicated(resolved_files$assay_type)
-    ]
-
-    if (length(duplicated_assay_types) > 0L) {
-      stop(
-        "Multiple loadable files matched the same assay type: ",
-        paste(unique(duplicated_assay_types), collapse = ", "),
-        "\nMatched files: ",
-        paste(resolved_files$filename, collapse = ", "),
-        "\nPlease provide a direct file path or use distinct assay types in the registry.",
-        call. = FALSE
-      )
-    }
-
-    ## ---------------------------------------------------
-    ## Load each resolved file and add it to object
-    ## ---------------------------------------------------
-
-    for (i in seq_len(nrow(resolved_files))) {
-      message(sprintf("Loading assay file: %s", resolved_files$filename[[i]]))
-
-      assay <- .load_assay(
-        path = resolved_files$path[[i]],
-        filename = resolved_files$filename[[i]],
-        assay_type = resolved_files$assay_type[[i]],
-        OncoAssay_class = resolved_files$OncoAssay_class[[i]],
-        loader = resolved_files$loader[[i]],
-        ...
-      )
-
-      object <- add_assay(
-        object = object,
-        assay = assay,
-        name = resolved_files$assay_type[[i]],
-        overwrite = overwrite
-      )
-    }
+    object <- add_assay(
+      object = object,
+      assay = assay,
+      name = context$assay_name,
+      overwrite = overwrite
+    )
 
     ## ---------------------------------------------------
     ## Final validation and return

@@ -7,7 +7,7 @@ library(data.table)
 #' Load a DepMap protein-coding gene expression assay
 #'
 #' Loads a DepMap protein-coding gene expression file into a
-#' `ProteinExpressionAssay`.
+#' `RNAAssay`.
 #'
 #' The DepMap expression file is read, filtered to default model entries, and
 #' converted into a Bioconductor-style expression matrix with features as rows
@@ -24,15 +24,15 @@ library(data.table)
 #'   as model/sample identifiers.
 #' @param feature_type A character string describing the expression feature type.
 #'
-#' @return A `ProteinExpressionAssay`, which inherits from
+#' @return A `RNAAssay`, which inherits from
 #'   `SummarizedExperiment`.
 #'
 #' @include internal-metadata.R
 #' @keywords internal
-load_protein_expression_assay <- function(
-  path,
+load_RNA_assay <- function(
+  data_path,
+  metadata_path = NULL,
   assay_name = "Protein Expression",
-  model_metadata_path = NULL,
   unit = "log2(TPM+1)",
   normalized = TRUE,
   id_col = "ModelID",
@@ -42,21 +42,21 @@ load_protein_expression_assay <- function(
   ## Validate arguments
   ## ---------------------------------------------------
 
-  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-    stop("`path` must be a single non-empty character string.", call. = FALSE)
+  if (!is.character(data_path) || length(data_path) != 1L || is.na(data_path) || !nzchar(data_path)) {
+    stop("`data_path` must be a single non-empty character string.", call. = FALSE)
   }
 
-  if (!file.exists(path)) {
-    stop("Protein expression assay file does not exist: ", path, call. = FALSE)
+  if (!file.exists(data_path)) {
+    stop("Protein expression assay file does not exist: ", data_path, call. = FALSE)
   }
 
-  if (!is.null(model_metadata_path)) {
-    if (!is.character(model_metadata_path) || length(model_metadata_path) != 1L || is.na(model_metadata_path) || !nzchar(model_metadata_path)) {
-      stop("`model_metadata_path` must be NULL or a single non-empty character string.", call. = FALSE)
+  if (!is.null(metadata_path)) {
+    if (!is.character(metadata_path) || length(metadata_path) != 1L || is.na(metadata_path) || !nzchar(metadata_path)) {
+      stop("`metadata_path` must be NULL or a single non-empty character string.", call. = FALSE)
     }
 
-    if (!file.exists(model_metadata_path)) {
-      stop("Model metadata file does not exist: ", model_metadata_path, call. = FALSE)
+    if (!file.exists(metadata_path)) {
+      stop("Model metadata file does not exist: ", metadata_path, call. = FALSE)
     }
   }
 
@@ -84,10 +84,10 @@ load_protein_expression_assay <- function(
   ## Read expression file
   ## ---------------------------------------------------
 
-  message("Reading protein expression assay file: ", basename(path))
+  message("Reading protein expression assay file: ", basename(data_path))
 
   expression_df <- data.table::fread(
-    file = path,
+    file = data_path,
     check.names = FALSE,
     data.table = TRUE,
     showProgress = interactive()
@@ -336,15 +336,8 @@ load_protein_expression_assay <- function(
     row.names = feature_ids
   )
 
-  if (is.null(model_metadata_path)) {
-    model_metadata_path <- .find_sidecar_file(
-      path = path,
-      filename = "Model.csv"
-    )
-  }
-
   model_metadata <- .load_model_metadata(
-    model_metadata_path = model_metadata_path,
+    model_metadata_path = metadata_path,
     model_ids = model_ids
   )
 
@@ -399,17 +392,17 @@ load_protein_expression_assay <- function(
   }
 
   ## ---------------------------------------------------
-  ## Return ProteinExpressionAssay
+  ## Return RNAAssay
   ## ---------------------------------------------------
 
-  ProteinExpressionAssay(
+  RNAAssay(
     data = expression_matrix,
     rowData = feature_metadata,
     colData = model_metadata,
     metadata = list(
       assay_name = assay_name,
       source = "DepMap",
-      source_file = normalizePath(path, winslash = "/", mustWork = TRUE),
+      source_file = normalizePath(data_path, winslash = "/", mustWork = TRUE),
       unit = unit,
       normalized = normalized,
       feature_type = feature_type,
@@ -417,18 +410,18 @@ load_protein_expression_assay <- function(
       filtered_to_default_model_entries = "IsDefaultEntryForModel" %in% colnames(expression_index),
       n_rows_before_default_filter = n_rows_before_default_filter,
       n_rows_after_default_filter = n_rows_after_default_filter,
-      model_metadata_loaded = !is.null(model_metadata_path),
-      model_metadata_file = if (!is.null(model_metadata_path)) {
-        normalizePath(model_metadata_path, winslash = "/", mustWork = TRUE)
+      model_metadata_loaded = !is.null(metadata_path),
+      model_metadata_file = if (!is.null(metadata_path)) {
+        normalizePath(metadata_path, winslash = "/", mustWork = TRUE)
       } else {
         NA_character_
       }
     ),
-    assay_name = "protein_expression",
+    assay_name = "RNA",
     unit = unit,
     normalized = normalized,
     feature_type = feature_type,
     source = "DepMap",
-    source_file = normalizePath(path, winslash = "/", mustWork = TRUE)
+    source_file = normalizePath(data_path, winslash = "/", mustWork = TRUE)
   )
 }

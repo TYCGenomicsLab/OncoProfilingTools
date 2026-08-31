@@ -12,96 +12,17 @@ library(enumr)
 #'
 #' @keywords internal
 supported_assays <- tibble::tribble(
-  ~release_name_pattern,
-  ~assay_type,
-  ~OncoAssay_class,
-  ~filename_pattern,
-  ~loader,
-  ~metadata_assay,
-
-  ## ---------------------------------------------------
-  ## DepMap Public 26Q1 metadata / auxiliary files
-  ## ---------------------------------------------------
-
-  "DepMap Public 26Q1",
-  NA,
-  NA,
-  "README.txt",
-  NA,
-  NA,
-  "DepMap Public 26Q1",
-  "ExpressionMetadata",
-  NA,
-  "Model.csv",
-  NA,
-  NA,
-
-  ## ---------------------------------------------------
-  ## DepMap expression assays
-  ## ---------------------------------------------------
-  "DepMap Public 26Q1",
-  "Expression",
-  "ExpressionAssay",
-  "OmicsExpressionTranscriptTPMLogp1HumanAllGenes.csv",
-  "load_expression_assay",
-  "ExpressionMetadata",
-  "DepMap Public 26Q1",
-  "Protein Expression",
-  "ProteinExpressionAssay",
-  "OmicsExpressionTPMLogp1HumanProteinCodingGenes.csv",
-  "load_protein_expression_assay",
-  "ExpressionMetadata",
-
-  ## ---------------------------------------------------
-  ## DepMap mutation assays
-  ## ---------------------------------------------------
-
-  "DepMap Public 26Q1",
-  "Mutation",
-  "MutationAssay",
-  "OmicsSomaticMutations.csv",
-  "load_mutation_assay",
-  "ExpressionMetadata",
-
-  ## ---------------------------------------------------
-  ## PRISM metadata
-  ## ---------------------------------------------------
-
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Cell_Line_Meta_Data\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Treatment_Meta_Data\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*_Extended_Primary_Compound_List\\.csv$",
-  NA,
-  NA,
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "DrugResponseAssayMetadata",
-  NA,
-  ".*README\\.txt$",
-  NA,
-  NA,
+  ~assay_name, ~OncoAssay_class, ~loader,
 
   ## ---------------------------------------------------
   ## PRISM response assay
   ## ---------------------------------------------------
+  "DrugResponse", "DrugResponseAssay", "load_drug_response_assay",
 
-  "PRISM Primary Repurposing DepMap Public 24Q2",
-  "PRISM",
-  "DrugResponseAssay",
-  ".*_Extended_Primary_Data_Matrix\\.csv$",
-  "load_drug_response_assay",
-  "DrugResponseAssayMetadata"
+  ## ---------------------------------------------------
+  ## RNA expression assay
+  ## ---------------------------------------------------
+  "RNA", "RNAAssay", "load_RNA_assay"
 )
 
 #' List supported assay types
@@ -112,7 +33,18 @@ supported_assays <- tibble::tribble(
 #'
 #' @export
 get_supported_types <- function() {
-  unique(stats::na.omit(supported_assays$assay_type))
+  unique(stats::na.omit(supported_assays$assay_name))
+}
+
+#' List all supported assays
+#'
+#' Returns all supported assays in a tribble to be used as a lookup table.
+#'
+#' @return A tribble
+#'
+#' @export
+get_supported_assays <- function() {
+  supported_assays
 }
 
 #' Get loadable assay registry
@@ -127,7 +59,7 @@ get_supported_types <- function() {
 #' @keywords internal
 .get_loadable_assay_registry <- function(assay_type = NULL) {
   registry <- supported_assays[
-    !is.na(supported_assays$assay_type) &
+    !is.na(supported_assays$assay_name) &
       !is.na(supported_assays$OncoAssay_class) &
       !is.na(supported_assays$loader), ,
     drop = FALSE
@@ -135,7 +67,7 @@ get_supported_types <- function() {
 
   if (!is.null(assay_type)) {
     registry <- registry[
-      registry$assay_type %in% assay_type, ,
+      registry$assay_name %in% assay_type, ,
       drop = FALSE
     ]
   }
@@ -145,21 +77,14 @@ get_supported_types <- function() {
 
 #' An enumeration of supported assay types
 #'
-#' Helpful for intelligent code completion and avoiding typos in assay type
-#' strings.
+#' Helpful for intelligent code completion and avoiding typos in assay types.
 #'
 #' @examples
-#' AssayTypes$Expression
-#' AssayTypes$ProteinExpression
+#' AssayTypes$RNA
 #' AssayTypes$PRISM
 #'
 #' @export
 AssayTypes <- enumr::enum( # nolint
-  ExpressionMetadata = "ExpressionMetadata",
-  Expression = "Expression",
-  ProteinExpression = "Protein Expression",
-  DrugResponseAssayMetadata = "DrugResponseAssayMetadata",
-  PRISM = "PRISM",
-  Mutation = "Mutation",
-  MutationMetadata = "MutationMetadata"
+  RNA = "RNA",
+  DrugResponse = "DrugResponse"
 )

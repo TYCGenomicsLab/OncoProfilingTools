@@ -29,22 +29,33 @@ library(data.table)
 #' @include internal-metadata.R
 #' @keywords internal
 load_drug_response_assay <- function(
-  path,
-  assay_name = "PRISM Primary Repurposing",
-  compound_metadata_path = NULL,
-  cell_line_metadata_path = NULL,
-  unit = "logfoldchange"
+  data_path,
+  metadata_path = NULL,
+  assay_name = "DrugResponse",
+  unit = "logfoldchange",
+  identifier = NULL,
+  ...
 ) {
   ## ---------------------------------------------------
   ## Validate arguments
   ## ---------------------------------------------------
 
-  if (!is.character(path) || length(path) != 1L || is.na(path) || !nzchar(path)) {
-    stop("`path` must be a single non-empty character string.", call. = FALSE)
+  if (!is.character(data_path) || length(data_path) != 1L || is.na(data_path) || !nzchar(data_path)) {
+    stop("`data_path` must be a single non-empty character string.", call. = FALSE)
   }
 
-  if (!file.exists(path)) {
-    stop("Drug response assay file does not exist: ", path, call. = FALSE)
+  if (!file.exists(data_path)) {
+    stop("Drug response assay file does not exist: ", data_path, call. = FALSE)
+  }
+
+  if (!is.null(metadata_path)) {
+    if (!is.character(metadata_path) || length(metadata_path) != 1L || is.na(metadata_path) || !nzchar(metadata_path)) {
+      stop("`metadata_path` must be NULL or a single non-empty character string.", call. = FALSE)
+    }
+
+    if (!file.exists(metadata_path)) {
+      stop("Model metadata file does not exist: ", metadata_path, call. = FALSE)
+    }
   }
 
   if (!is.character(assay_name) || length(assay_name) != 1L || is.na(assay_name) || !nzchar(assay_name)) {
@@ -55,66 +66,14 @@ load_drug_response_assay <- function(
     stop("`unit` must be a single non-empty character string.", call. = FALSE)
   }
 
-  if (!is.null(compound_metadata_path)) {
-    if (!is.character(compound_metadata_path) || length(compound_metadata_path) != 1L || is.na(compound_metadata_path) || !nzchar(compound_metadata_path)) {
-      stop(
-        "`compound_metadata_path` must be NULL or a single non-empty character string.",
-        call. = FALSE
-      )
-    }
-
-    if (!file.exists(compound_metadata_path)) {
-      stop(
-        "Compound metadata file does not exist: ",
-        compound_metadata_path,
-        call. = FALSE
-      )
-    }
-  }
-
-  if (!is.null(cell_line_metadata_path)) {
-    if (!is.character(cell_line_metadata_path) || length(cell_line_metadata_path) != 1L || is.na(cell_line_metadata_path) || !nzchar(cell_line_metadata_path)) {
-      stop(
-        "`cell_line_metadata_path` must be NULL or a single non-empty character string.",
-        call. = FALSE
-      )
-    }
-
-    if (!file.exists(cell_line_metadata_path)) {
-      stop(
-        "Cell line metadata file does not exist: ",
-        cell_line_metadata_path,
-        call. = FALSE
-      )
-    }
-  }
-
-  ## ---------------------------------------------------
-  ## Resolve PRISM sidecar metadata files if not provided
-  ## ---------------------------------------------------
-
-  if (is.null(compound_metadata_path)) {
-    compound_metadata_path <- .find_sidecar_file(
-      path = path,
-      filename = "Repurposing_Public_24Q2_Extended_Primary_Compound_List.csv"
-    )
-  }
-
-  if (is.null(cell_line_metadata_path)) {
-    cell_line_metadata_path <- .find_sidecar_file(
-      path = path,
-      filename = "Repurposing_Public_24Q2_Cell_Line_Meta_Data.csv"
-    )
-  }
-
   ## ---------------------------------------------------
   ## Read response matrix
   ## ---------------------------------------------------
 
-  message("Reading drug response assay file: ", basename(path))
+  message("Reading drug response assay file: ", basename(data_path))
 
   response_df <- data.table::fread(
-    file = path,
+    file = data_path,
     check.names = FALSE,
     data.table = TRUE,
     showProgress = interactive()
@@ -143,8 +102,22 @@ load_drug_response_assay <- function(
   ## Extract treatment and model IDs
   ## ---------------------------------------------------
 
-  treatment_ids <- response_df[[1L]]
-  model_ids <- colnames(response_df)[-1L]
+  # if user supplied identifier, that should be the colum name of ID's
+  # else we assume it is in the first column
+  if (!is.null(identifier)) {
+    if (!is.character(identifier) || length(identifier) != 1L || is.na(identifier) || !nzchar(identifier)) {
+      stop("`identifier` must be a single non-empty character string.", call. = FALSE)
+    }
+    if (!identifier %in% colnames(response_df)) {
+      stop("Identifier column '", identifier, "' not found in data file: ", data_path, call. = FALSE)
+    }
+    treatment_ids <- response_df[[identifier]]
+  } else {
+    treatment_ids <- response_df[[1L]]
+  }
+
+  id_col <- if (is.null(identifier)) colnames(response_df)[1L] else identifier
+  model_ids <- setdiff(colnames(response_df), id_col)
 
   if (anyNA(treatment_ids) || any(!nzchar(treatment_ids))) {
     stop(
@@ -185,7 +158,7 @@ load_drug_response_assay <- function(
   ## ---------------------------------------------------
 
   response_values_df <- response_df |>
-    dplyr::select(-1L)
+    dplyr::select(-dplyr::all_of(id_col))
 
   non_numeric_cols <- names(response_values_df)[
     !vapply(response_values_df, is.numeric, logical(1))
@@ -258,47 +231,73 @@ load_drug_response_assay <- function(
   ## Construct rowData and colData
   ## ---------------------------------------------------
 
-  treatment_metadata <- .load_prism_compound_metadata(
-    compound_metadata_path = compound_metadata_path,
-    treatment_ids = treatment_ids
-  )
+  #treatment_metadata <- .load_prism_compound_metadata(
+  #  compound_metadata_path = compound_metadata_path,
+  #  treatment_ids = treatment_ids
+  #)
 
-  model_metadata <- .load_prism_cell_line_metadata(
-    cell_line_metadata_path = cell_line_metadata_path,
-    model_ids = model_ids
+  #model_metadata <- .load_prism_cell_line_metadata(
+  #  cell_line_metadata_path = cell_line_metadata_path,
+  #  model_ids = model_ids
+  #)
+
+  # TODO: update to take generic drug response metadata file using same identifier info
+  # load in the metadata file
+  if (is.null(metadata_path)) {
+    rowData <- S4Vectors::DataFrame(
+      treatment_id = treatment_ids,
+      row.names = treatment_ids
+    )
+  } else {
+    metadata_df <- data.table::fread(
+      file = metadata_path,
+      check.names = FALSE,
+      data.table = TRUE,
+      showProgress = interactive()
+    )
+
+    if (nrow(metadata_df) == 0L) {
+      stop("Metadata file is empty: ", metadata_path, call. = FALSE)
+    }
+
+    if (!id_col %in% colnames(metadata_df)) {
+      stop("Identifier column '", id_col, "' not found in metadata file: ", metadata_path, call. = FALSE)
+    }
+
+    metadata_ids <- as.character(metadata_df[[id_col]])
+
+    if (anyNA(metadata_ids) || any(!nzchar(metadata_ids))) {
+      stop(
+        "Metadata identifiers contain NA or empty values in column '",
+        id_col,
+        "'.",
+        call. = FALSE
+      )
+    }
+
+    if (anyDuplicated(metadata_ids)) {
+      stop("Metadata file contains duplicated identifiers in column '", id_col, "'.", call. = FALSE)
+    }
+
+    match_idx <- match(treatment_ids, metadata_ids)
+    if (anyNA(match_idx)) {
+      warning("Some treatment IDs in the response matrix do not have matching metadata entries.", call. = FALSE)
+    }
+
+    row_data_df <- metadata_df[match_idx, , drop = FALSE]
+    rowData <- S4Vectors::DataFrame(row_data_df)
+    rownames(rowData) <- treatment_ids
+  }
+
+  colData <- S4Vectors::DataFrame(
+    model_id = model_ids,
+    row.names = model_ids
   )
 
   ## ---------------------------------------------------
   ## Final consistency checks
   ## ---------------------------------------------------
 
-  if (!identical(rownames(response_matrix), rownames(treatment_metadata))) {
-    stop(
-      "`rownames(response_matrix)` and `rownames(treatment_metadata)` do not match.",
-      call. = FALSE
-    )
-  }
-
-  if (!identical(colnames(response_matrix), rownames(model_metadata))) {
-    stop(
-      "`colnames(response_matrix)` and `rownames(model_metadata)` do not match.",
-      call. = FALSE
-    )
-  }
-
-  if (nrow(treatment_metadata) != nrow(response_matrix)) {
-    stop(
-      "`treatment_metadata` must have one row per response matrix row.",
-      call. = FALSE
-    )
-  }
-
-  if (nrow(model_metadata) != ncol(response_matrix)) {
-    stop(
-      "`model_metadata` must have one row per response matrix column.",
-      call. = FALSE
-    )
-  }
 
   ## ---------------------------------------------------
   ## Return DrugResponseAssay
@@ -306,18 +305,8 @@ load_drug_response_assay <- function(
 
   assay_metadata <- list(
     assay_name = assay_name,
-    source = "PRISM",
-    source_file = normalizePath(path, winslash = "/", mustWork = TRUE),
-    compound_metadata_file = if (is.null(compound_metadata_path)) {
-      NA_character_
-    } else {
-      normalizePath(compound_metadata_path, winslash = "/", mustWork = TRUE)
-    },
-    cell_line_metadata_file = if (is.null(cell_line_metadata_path)) {
-      NA_character_
-    } else {
-      normalizePath(cell_line_metadata_path, winslash = "/", mustWork = TRUE)
-    },
+    source = "DrugResponse",
+    source_file = normalizePath(data_path, winslash = "/", mustWork = TRUE),
     unit = unit,
     n_treatments = nrow(response_matrix),
     n_models = ncol(response_matrix),
@@ -326,17 +315,15 @@ load_drug_response_assay <- function(
       NA_real_
     } else {
       round(100 * n_missing / length(response_matrix), digits = 2L)
-    },
-    compound_metadata_loaded = !is.null(compound_metadata_path),
-    cell_line_metadata_loaded = !is.null(cell_line_metadata_path)
+    }
   )
 
   se <- SummarizedExperiment::SummarizedExperiment(
     assays = S4Vectors::SimpleList(
       response = response_matrix
     ),
-    rowData = treatment_metadata,
-    colData = model_metadata,
+    rowData = rowData,
+    colData = colData,
     metadata = assay_metadata
   )
 
