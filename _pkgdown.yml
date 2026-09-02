@@ -1,4 +1,43 @@
 url: https://tycgenomicslab.github.io/OncoProfilingTools/
 template:
   bootstrap: 5
+project:
+  render: ['*.qmd']
 
+
+
+navbar:
+  title: "OncoProfilingTools"
+  left:
+    - text: "Home"
+      href: ../
+
+    - text: "Install"
+      href: articles/Install.html
+
+    - text: "Get started"
+      href: articles/GetStarted.html
+
+    - text: "Vignettes"
+      menu:
+        - text: "Assays"
+        - text: "RNA"
+          href: articles/RNAAssay.html
+        - text: "Drug Response"
+          href: articles/DrugResponseAssay.html
+        - text: "-------"
+        - text: "PRISM"
+        - text: "Using PRISM"
+          href: articles/PRISM.html
+
+    - text: "News"
+      href: news/index.html
+
+    - text: "Reference"
+      href: reference/index.html
+
+  right:
+    - icon: fa-home
+      href: ../
+    - icon: fa-github
+      href: https://github.com/tycgenomicslab/OncoProfilingTools
