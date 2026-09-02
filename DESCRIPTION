@@ -4,7 +4,7 @@ Title: Tools for Oncology Profiling Data Analysis
 Version: 0.1.0
 Authors@R: c(
     person(given = "Jason", family = "LaPierre", role = c("aut", "cre"), email = "lapierreja@vcu.edu", comment = c(ORCID = "0009-0006-1827-8213")),
-    person(given = "Johnna", family = "Berryhill", role = c("aut", "cre"), email = "berryhilljk@vcu.edu"),
+    person(given = "Johnna", family = "Berryhill", role = c("aut"), email = "berryhilljk@vcu.edu"),
     person(given = "Katarzyna M.", family = "Tyc", role = "aut", comment = c(ORCID = "0000-0002-3850-6934"))
     )
 Description: Provides S4 classes and methods for managing and analyzing
