@@ -16,7 +16,9 @@ Type any R code in the chunk, for example:
 
 ``` r
 
-mycars <- within(mtcars, { cyl <- ordered(cyl) })
+mycars <- within(mtcars, {
+  cyl <- ordered(cyl)
+})
 mycars
 ```
 

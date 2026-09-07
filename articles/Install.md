@@ -2,12 +2,12 @@
 
 ## How to Install
 
-### Using `pak`
-
 OncoProflingTools (OPT) is currently available from our [GitHub
 repository](https://github.com/oncoproflingtools/oncoproflingtools)
 while in active development. In the future, we plan to make it available
 on CRAN or Bioconductor.
+
+### Using `pak`
 
 Ensure [R](https://www.r-project.org/) version 4.0 or greater is
 installed. To install OPT, run the following command in the R console:

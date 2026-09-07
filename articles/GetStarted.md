@@ -1,60 +1,125 @@
-# R Notebook
+# Getting started
 
-The [R
-plugin](https://www.jetbrains.com/help/pycharm/r-plugin-support.html)
-for IntelliJ-based IDEs provides handy capabilities to work with the [R
-Markdown](https://www.jetbrains.com/help/pycharm/r-markdown.html) files.
-To
-[add](https://www.jetbrains.com/help/pycharm/r-markdown.html#add-code-chunk)
-a new R chunk,
+## Understanding the structure
 
-position the caret at any line or the code chunk, then click “+”.
+Before starting to interact with the package you should understand the
+structure of the objects you’ll be working with. OPT borrows and expands
+from well-known Bioconductor packages for dealing with large-scale
+experimental data. The following two objects are the most important to
+understand:
 
-The code chunk appears:
+1.  **`OncoExperiment`** - a class that inherits from
+    [MultiAssayExperiment](https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html).
+    It contains all the information needed to perform downstream
+    analyses in the form of assays.
+2.  **`*Assay`** - a class that inherits from
+    [SummarizedExperiment](https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html).
+    Different types of assays exist to support loading various sources
+    with different structures. Some examples include:
+    [`RNAAssay`](https://tycgenomicslab.github.io/OncoProfilingTools/articles/),
+    [`DrugResponseAssay`](https://tycgenomicslab.github.io/OncoProfilingTools/articles/),
+    and
+    [`PRISMAssay`](https://tycgenomicslab.github.io/OncoProfilingTools/articles/).
 
-Type any R code in the chunk, for example:
+## `OncoExperiment`
+
+The `OncoExperiment` is the core object that contains all the
+information. It harmonizes all the assays (or experiments) together and
+maps them to the samples. OncoExperiment is primarily a
+`MultiAssayExperiment` (`MAE`) with a few additional methods to deal
+with oncogenic data. Although this guide will summarize the structure to
+a degree, the authors of `MAE` have created some wonderful [quick start
+guides](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/QuickStartMultiAssay.html)
+and
+[cheatsheets](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/MultiAssayExperiment_cheatsheet.html)
+with in-depth information. Please refer to these if you ever need help
+navigating an `OncoExperiment` you’ve created.
+
+> ![](assets/mae.png)  
+> Credit: [“Software For The Integration of Multi-Omics Experiments In
+> Bioconductor.” Marcel Ramos et.
+> al.](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/MultiAssayExperiment.html)
+
+### Slots
+
+A quick overview of the slots you should know about in an
+`OncoExperiment`:
+
+- **`project_name`** - The name of the project for your own reference.
+- **`ExperimentList`** - Contains all ID-based experimental data. An
+  instance of `ExperimentList`. Access with
+  `experiments(OncoExperiment)`.
+- **`colData`** - Contains all sample-level metadata. An instance of
+  `DataFrame`. Access with `colData(OncoExperiment)` or `$`.
+- **`sampleMap`** - Helps to relate experiment-specific sample naming or
+  replicate observations to the row names in `colData`. Access with
+  `sampleMap(OncoExperiment)`.
+- **`metadata`** - Storing any additional metadata about the study. This
+  is free to include anything. We store some basic information as a
+  `list`. Individual assays can store additional metadata in their own
+  `metadata` slot. Access with `metadata(OncoExperiment)`.
+
+This quick start guide by the Waldron Lab has a lot more great
+information: [Quick Start
+Guide](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/QuickStartMultiAssay.html).
+There is also a lot of useful examples showing these accessors in use.
+
+### Creating an `OncoExperiment`
 
 ``` r
 
-mycars <- within(mtcars, { cyl <- ordered(cyl) })
-mycars
+exp <- OncoExperiment(project_name = "Murine RNA-Seq 04")
+exp
 ```
 
-    ##                      mpg cyl  disp  hp drat    wt  qsec vs am gear carb
-    ## Mazda RX4           21.0   6 160.0 110 3.90 2.620 16.46  0  1    4    4
-    ## Mazda RX4 Wag       21.0   6 160.0 110 3.90 2.875 17.02  0  1    4    4
-    ## Datsun 710          22.8   4 108.0  93 3.85 2.320 18.61  1  1    4    1
-    ## Hornet 4 Drive      21.4   6 258.0 110 3.08 3.215 19.44  1  0    3    1
-    ## Hornet Sportabout   18.7   8 360.0 175 3.15 3.440 17.02  0  0    3    2
-    ## Valiant             18.1   6 225.0 105 2.76 3.460 20.22  1  0    3    1
-    ## Duster 360          14.3   8 360.0 245 3.21 3.570 15.84  0  0    3    4
-    ## Merc 240D           24.4   4 146.7  62 3.69 3.190 20.00  1  0    4    2
-    ## Merc 230            22.8   4 140.8  95 3.92 3.150 22.90  1  0    4    2
-    ## Merc 280            19.2   6 167.6 123 3.92 3.440 18.30  1  0    4    4
-    ## Merc 280C           17.8   6 167.6 123 3.92 3.440 18.90  1  0    4    4
-    ## Merc 450SE          16.4   8 275.8 180 3.07 4.070 17.40  0  0    3    3
-    ## Merc 450SL          17.3   8 275.8 180 3.07 3.730 17.60  0  0    3    3
-    ## Merc 450SLC         15.2   8 275.8 180 3.07 3.780 18.00  0  0    3    3
-    ## Cadillac Fleetwood  10.4   8 472.0 205 2.93 5.250 17.98  0  0    3    4
-    ## Lincoln Continental 10.4   8 460.0 215 3.00 5.424 17.82  0  0    3    4
-    ## Chrysler Imperial   14.7   8 440.0 230 3.23 5.345 17.42  0  0    3    4
-    ## Fiat 128            32.4   4  78.7  66 4.08 2.200 19.47  1  1    4    1
-    ## Honda Civic         30.4   4  75.7  52 4.93 1.615 18.52  1  1    4    2
-    ## Toyota Corolla      33.9   4  71.1  65 4.22 1.835 19.90  1  1    4    1
-    ## Toyota Corona       21.5   4 120.1  97 3.70 2.465 20.01  1  0    3    1
-    ## Dodge Challenger    15.5   8 318.0 150 2.76 3.520 16.87  0  0    3    2
-    ## AMC Javelin         15.2   8 304.0 150 3.15 3.435 17.30  0  0    3    2
-    ## Camaro Z28          13.3   8 350.0 245 3.73 3.840 15.41  0  0    3    4
-    ## Pontiac Firebird    19.2   8 400.0 175 3.08 3.845 17.05  0  0    3    2
-    ## Fiat X1-9           27.3   4  79.0  66 4.08 1.935 18.90  1  1    4    1
-    ## Porsche 914-2       26.0   4 120.3  91 4.43 2.140 16.70  0  1    5    2
-    ## Lotus Europa        30.4   4  95.1 113 3.77 1.513 16.90  1  1    5    2
-    ## Ford Pantera L      15.8   8 351.0 264 4.22 3.170 14.50  0  1    5    4
-    ## Ferrari Dino        19.7   6 145.0 175 3.62 2.770 15.50  0  1    5    6
-    ## Maserati Bora       15.0   8 301.0 335 3.54 3.570 14.60  0  1    5    8
-    ## Volvo 142E          21.4   4 121.0 109 4.11 2.780 18.60  1  1    4    2
+    ## An OncoExperiment object
+    ## Project Name: Murine RNA-Seq 04 
+    ## Version: 0.1.0 
+    ## Experiments: none
 
-Now, click the **Run** button on the chunk toolbar to
-[execute](https://www.jetbrains.com/help/pycharm/r-markdown.html#run-r-code)
-the chunk code. The result should be placed under the chunk. Click the
-**Knit and Open Document** to build and preview an output.
+### Subsetting
+
+To demonstrate accessing the data in an `OncoExperiment`, let’s
+construct a simple example with an `RNAAssay`. We’ve created an example
+file with a 5x5 table. Rows contain unique sample names and colums
+contain unique gene names. The values are random numbers between 1 and
+10. We can peek at it to demonstrate how it is structured:
+
+``` r
+
+head(read.csv("assets/rna_example.csv", header = TRUE, sep = ","))
+```
+
+    ##      ModelID TSPAN6..7105. TNMD..64102. DPM1..8813. SCYL3..57147. FIRRM..55732.
+    ## 1 ACH-001113      4.956577     0.000000    7.577648      3.179411      4.765742
+    ## 2 ACH-001289      4.955015     0.617117    7.333933      2.782935      3.735371
+    ## 3 ACH-001339      3.421952     0.000000    7.546069      2.615880      4.476233
+    ## 4 ACH-001619      5.196729     0.000000    6.362268      2.144996      3.087183
+    ## 5 ACH-001979      4.651643     0.000000    5.946408      2.454515      1.852111
+
+Now let’s load the data into an OncoExperiment:
+
+``` r
+
+# let's create a simple 5x5 table to load
+example <- OncoExperiment(project_name = "Example")
+example <- load_assays(example, AssayTypes$RNA, data = "assets/rna_example.csv")
+example
+```
+
+    ## An OncoExperiment object
+    ## Project Name: Example 
+    ## Version: 0.1.0 
+    ## Experiments: RNA 
+    ## 
+    ## Experiment summary:
+    ##  experiment    class   dim
+    ##         RNA RNAAssay 5 x 5
+
+#### Single Bracket
+
+Test Test
+
+## `*Assay`
+
+![](assets/se.png)

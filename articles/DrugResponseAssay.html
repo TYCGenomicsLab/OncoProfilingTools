@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Drug Response Assay • OncoProfilingTools</title>
+<title>Drug Response Assay (LFC) • OncoProfilingTools</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Drug Response Assay">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Drug Response Assay (LFC)">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -37,7 +37,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes">
 <li><h6 class="dropdown-header" data-toc-skip>Assays</h6></li>
     <li><a class="dropdown-item" href="../articles/RNAAssay.html">RNA</a></li>
-    <li><a class="dropdown-item" href="../articles/DrugResponseAssay.html">Drug Response</a></li>
+    <li><a class="dropdown-item" href="../articles/DrugResponseAssay.html">Drug Response (LFC)</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>PRISM</h6></li>
     <li><a class="dropdown-item" href="../articles/PRISM.html">Using PRISM</a></li>
@@ -62,7 +62,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Drug Response Assay</h1>
+      <h1>Drug Response Assay (LFC)</h1>
             
       
 
@@ -72,10 +72,496 @@
     
     
 <div class="section level2">
-<h2 id="dra">DRA<a class="anchor" aria-label="anchor" href="#dra"></a>
+<h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a>
 </h2>
+<p>For a log-fold change drug response assay (DRA), your data should be
+formated with cell lines as columns and drugs as rows. The first column
+is expected to be the drug identifiers. For example:</p>
+<p><img src="assets/dra_format.png"></p>
+<div class="section level3">
+<h3 id="metadata">Metadata<a class="anchor" aria-label="anchor" href="#metadata"></a>
+</h3>
+<p>Providing metadata is optional but will likely accompany your data.
+Metadata should be provided in a separate tab-delimited file. The first
+column should still be the same drug identifiers that can be mapped to
+those listed in the data file. Here is an example of a metadata
+file:</p>
+<table class="table">
+<colgroup>
+<col width="7%">
+<col width="43%">
+<col width="19%">
+<col width="24%">
+<col width="4%">
+</colgroup>
+<thead><tr class="header">
+<th align="left">Arbitrary.ID</th>
+<th align="left">Drug.Name..Brand.</th>
+<th align="left">Drug.Name..Generic.</th>
+<th align="left">Drug.Company</th>
+<th align="left">Dosage</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">DRG-001</td>
+<td align="left">Tobramycin Sulfate</td>
+<td align="left">TOBRAMYCIN SULFATE</td>
+<td align="left"></td>
+<td align="left">9.1mg</td>
+</tr>
+<tr class="even">
+<td align="left">DRG-002</td>
+<td align="left">Aptivus</td>
+<td align="left">tipranavir</td>
+<td align="left">Boehringer Ingelheim Pharmaceuticals, Inc.</td>
+<td align="left">6.0mg</td>
+</tr>
+<tr class="odd">
+<td align="left">DRG-003</td>
+<td align="left">Ketoprofen</td>
+<td align="left">ketoprofen</td>
+<td align="left"></td>
+<td align="left">5.1mg</td>
+</tr>
+<tr class="even">
+<td align="left">DRG-004</td>
+<td align="left">Nortriptyline Hydrochloride</td>
+<td align="left">Nortriptyline Hydrochloride</td>
+<td align="left">REMEDYREPACK INC.</td>
+<td align="left">9.4mg</td>
+</tr>
+<tr class="odd">
+<td align="left">DRG-005</td>
+<td align="left">Diovan HCT</td>
+<td align="left">valsartan and hydrochlorothiazide</td>
+<td align="left">PD-Rx Pharmaceuticals, Inc.</td>
+<td align="left">4.0mg</td>
+</tr>
+<tr class="even">
+<td align="left">DRG-006</td>
+<td align="left">napoleon PERDIS SHEER GENIUS LIQUID FOUNDATION BROAD
+SPECTRUM SPF 20 Look 5</td>
+<td align="left">OCTINOXATE, TITANIUM DIOXIDE</td>
+<td align="left">Napoleon Perdis Cosmetics, Inc</td>
+<td align="left">2.5mg</td>
+</tr>
+</tbody>
+</table>
 </div>
-  </main>
+</div>
+<div class="section level2">
+<h2 id="loading">Loading<a class="anchor" aria-label="anchor" href="#loading"></a>
+</h2>
+<p>Loading a DRA is achieved similarly to other assays. For this example
+we will load in metadata but this is optional. We’ve created
+<code>csv</code> files with some 50x50 dummy data to act as our
+example:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tycgenomicslab.github.io/OncoProfilingTools/">OncoProfilingTools</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="http://waldronlab.io/MultiAssayExperiment/" class="external-link">MultiAssayExperiment</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://bioconductor.org/packages/SummarizedExperiment" class="external-link">SummarizedExperiment</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">exp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/OncoExperiment.html">OncoExperiment</a></span><span class="op">(</span>project_name <span class="op">=</span> <span class="st">"Example DRA"</span><span class="op">)</span></span>
+<span><span class="va">exp</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_assays.html">load_assays</a></span><span class="op">(</span></span>
+<span>  object <span class="op">=</span> <span class="va">exp</span>,</span>
+<span>  assay_type <span class="op">=</span> <span class="va">AssayTypes</span><span class="op">$</span><span class="va">DrugResponse</span>,</span>
+<span>  data <span class="op">=</span> <span class="st">"assets/dra_example.csv"</span>,</span>
+<span>  metadata <span class="op">=</span> <span class="st">"assets/dra_metadata_example.csv"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">exp</span></span></code></pre></div>
+<pre><code><span><span class="co">## An OncoExperiment object</span></span>
+<span><span class="co">## Project Name: Example DRA </span></span>
+<span><span class="co">## Version: 0.1.0 </span></span>
+<span><span class="co">## Experiments: DrugResponse </span></span>
+<span><span class="co">## </span></span>
+<span><span class="co">## Experiment summary:</span></span>
+<span><span class="co">##    experiment             class     dim</span></span>
+<span><span class="co">##  DrugResponse DrugResponseAssay 50 x 50</span></span></code></pre>
+</div>
+<div class="section level2">
+<h2 id="navigating-data">Navigating data<a class="anchor" aria-label="anchor" href="#navigating-data"></a>
+</h2>
+<p>Your <code>OncoExperiment</code> links all your experimental assays
+using the identifiers provided in your files. We can check that they
+loaded in correctly by observing the <code>colData</code> (see <a href="https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/QuickStartMultiAssay.html" class="external-link">MultiAssayExperiment</a>
+for more information on this):</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">colData</a></span><span class="op">(</span><span class="va">exp</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<pre><code><span><span class="co">## DataFrame with 6 rows and 1 column</span></span>
+<span><span class="co">##            model_id</span></span>
+<span><span class="co">##         &lt;character&gt;</span></span>
+<span><span class="co">## VQM-732     VQM-732</span></span>
+<span><span class="co">## 0Xe-933     0Xe-933</span></span>
+<span><span class="co">## dFL-450     dFL-450</span></span>
+<span><span class="co">## EcW-351     EcW-351</span></span>
+<span><span class="co">## nkn-474     nkn-474</span></span>
+<span><span class="co">## yBR-806     yBR-806</span></span></code></pre>
+<div class="section level3">
+<h3 id="access-raw-values">Access raw values<a class="anchor" aria-label="anchor" href="#access-raw-values"></a>
+</h3>
+<p>If you need to look at the raw values of your data or interact with
+them directly, you can access the <code>DrugResponseAssay</code>
+(instance of <code>SummarizedExperiment</code>) object directly.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dra</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-methods.html" class="external-link">experiments</a></span><span class="op">(</span><span class="va">exp</span><span class="op">)</span><span class="op">$</span><span class="va">DrugResponse</span> <span class="co"># access by whatever you named the assay</span></span>
+<span><span class="va">dra</span></span></code></pre></div>
+<pre><code><span><span class="co">## class: DrugResponseAssay </span></span>
+<span><span class="co">## dim: 50 50 </span></span>
+<span><span class="co">## metadata(8): assay_name source ... n_missing_values</span></span>
+<span><span class="co">##   missing_value_percent</span></span>
+<span><span class="co">## assays(1): response</span></span>
+<span><span class="co">## rownames(50): DRG-001 DRG-002 ... DRG-049 DRG-050</span></span>
+<span><span class="co">## rowData names(5): Arbitrary.ID Drug.Name..Brand. Drug.Name..Generic.</span></span>
+<span><span class="co">##   Drug.Company Dosage</span></span>
+<span><span class="co">## colnames(50): VQM-732 0Xe-933 ... IuA-546 wde-847</span></span>
+<span><span class="co">## colData names(1): model_id</span></span></code></pre>
+<div class="section level4">
+<h4 id="get-matrix-of-raw-values">Get matrix of raw values<a class="anchor" aria-label="anchor" href="#get-matrix-of-raw-values"></a>
+</h4>
+<p>The raw values are stored in the <code>assays</code> slot of the
+<code>SummarizedExperiment</code> object. Accessing them is relatively
+straightforward. In this example, we’ll just print the first 3 rows of
+the matrix as an example. You should see drug names as row names and
+cell line names as column names.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dra_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">assays</a></span><span class="op">(</span><span class="va">dra</span><span class="op">)</span><span class="op">$</span><span class="va">response</span> <span class="co"># TODO: future function will make this easier (i.e. get_values(...)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">dra_matrix</span>, n <span class="op">=</span> <span class="fl">3L</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<table style="width:100%;" class="table">
+<colgroup>
+<col width="1%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+<col width="1%">
+<col width="2%">
+<col width="2%">
+<col width="2%">
+</colgroup>
+<thead><tr class="header">
+<th align="left"></th>
+<th align="right">VQM-732</th>
+<th align="right">0Xe-933</th>
+<th align="right">dFL-450</th>
+<th align="right">EcW-351</th>
+<th align="right">nkn-474</th>
+<th align="right">yBR-806</th>
+<th align="right">6rZ-921</th>
+<th align="right">CVp-900</th>
+<th align="right">FBr-666</th>
+<th align="right">pwX-711</th>
+<th align="right">8Ak-004</th>
+<th align="right">Wvk-040</th>
+<th align="right">uuk-615</th>
+<th align="right">wwg-515</th>
+<th align="right">1Qu-701</th>
+<th align="right">JPn-336</th>
+<th align="right">5Dj-010</th>
+<th align="right">lW5-428</th>
+<th align="right">hGO-989</th>
+<th align="right">eIt-266</th>
+<th align="right">Bi0-209</th>
+<th align="right">mMA-166</th>
+<th align="right">iA6-055</th>
+<th align="right">GRe-728</th>
+<th align="right">ipU-508</th>
+<th align="right">r6v-183</th>
+<th align="right">OV3-829</th>
+<th align="right">6oP-633</th>
+<th align="right">Vd7-714</th>
+<th align="right">wyH-085</th>
+<th align="right">ckl-460</th>
+<th align="right">FdA-492</th>
+<th align="right">gtA-835</th>
+<th align="right">FT5-355</th>
+<th align="right">fws-845</th>
+<th align="right">aYK-906</th>
+<th align="right">CyJ-883</th>
+<th align="right">w15-391</th>
+<th align="right">spU-324</th>
+<th align="right">qK6-434</th>
+<th align="right">Y4t-949</th>
+<th align="right">jpJ-859</th>
+<th align="right">IK1-886</th>
+<th align="right">NuV-036</th>
+<th align="right">oFd-671</th>
+<th align="right">Aeb-277</th>
+<th align="right">zSF-424</th>
+<th align="right">BR9-197</th>
+<th align="right">IuA-546</th>
+<th align="right">wde-847</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">DRG-001</td>
+<td align="right">2.78854</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">-5.53579</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">7.84359</td>
+<td align="right">-8.26122</td>
+<td align="right">-1.56156</td>
+<td align="right">-9.40406</td>
+<td align="right">NA</td>
+<td align="right">0.10711</td>
+<td align="right">-9.46928</td>
+<td align="right">-6.02325</td>
+<td align="right">2.99769</td>
+<td align="right">0.89883</td>
+<td align="right">-5.59119</td>
+<td align="right">1.78531</td>
+<td align="right">6.18861</td>
+<td align="right">-9.87002</td>
+<td align="right">6.11639</td>
+<td align="right">3.96279</td>
+<td align="right">-3.19499</td>
+<td align="right">-6.89041</td>
+<td align="right">9.14426</td>
+<td align="right">-3.26811</td>
+<td align="right">NA</td>
+<td align="right">-8.06567</td>
+<td align="right">6.94989</td>
+<td align="right">2.07452</td>
+<td align="right">6.14257</td>
+<td align="right">4.59464</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1.04081</td>
+<td align="right">6.58809</td>
+<td align="right">2.37040</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">-9.08351</td>
+<td align="right">-5.44203</td>
+<td align="right">-4.21224</td>
+<td align="right">NA</td>
+<td align="right">-5.34418</td>
+<td align="right">NA</td>
+<td align="right">-4.44053</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+</tr>
+<tr class="even">
+<td align="left">DRG-002</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">-4.66044</td>
+<td align="right">8.73309</td>
+<td align="right">2.96071</td>
+<td align="right">2.18262</td>
+<td align="right">NA</td>
+<td align="right">4.58254</td>
+<td align="right">-6.73195</td>
+<td align="right">-2.41089</td>
+<td align="right">9.79047</td>
+<td align="right">2.80000</td>
+<td align="right">1.13899</td>
+<td align="right">3.69229</td>
+<td align="right">6.85704</td>
+<td align="right">5.52000</td>
+<td align="right">NA</td>
+<td align="right">-9.35800</td>
+<td align="right">NA</td>
+<td align="right">-4.64518</td>
+<td align="right">-5.78034</td>
+<td align="right">8.85819</td>
+<td align="right">7.52735</td>
+<td align="right">-3.70644</td>
+<td align="right">3.10877</td>
+<td align="right">-2.08736</td>
+<td align="right">8.29095</td>
+<td align="right">NA</td>
+<td align="right">-4.70240</td>
+<td align="right">NA</td>
+<td align="right">1.22736</td>
+<td align="right">-4.74517</td>
+<td align="right">1.69172</td>
+<td align="right">7.95646</td>
+<td align="right">-2.01199</td>
+<td align="right">-5.61358</td>
+<td align="right">9.95075</td>
+<td align="right">0.19053</td>
+<td align="right">-8.18181</td>
+<td align="right">NA</td>
+<td align="right">-7.80702</td>
+<td align="right">2.54892</td>
+<td align="right">5.84159</td>
+<td align="right">-1.55680</td>
+<td align="right">-8.72945</td>
+<td align="right">-2.36761</td>
+<td align="right">9.92243</td>
+<td align="right">NA</td>
+<td align="right">9.42157</td>
+<td align="right">7.21559</td>
+</tr>
+<tr class="odd">
+<td align="left">DRG-003</td>
+<td align="right">-9.77038</td>
+<td align="right">4.41444</td>
+<td align="right">3.63421</td>
+<td align="right">0.73941</td>
+<td align="right">-4.66350</td>
+<td align="right">2.81924</td>
+<td align="right">NA</td>
+<td align="right">-1.30469</td>
+<td align="right">-0.92553</td>
+<td align="right">NA</td>
+<td align="right">7.51706</td>
+<td align="right">-4.73222</td>
+<td align="right">0.01172</td>
+<td align="right">-6.42696</td>
+<td align="right">8.25256</td>
+<td align="right">NA</td>
+<td align="right">-4.03110</td>
+<td align="right">2.77899</td>
+<td align="right">2.17940</td>
+<td align="right">-6.94321</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">5.57253</td>
+<td align="right">0.60707</td>
+<td align="right">-9.98856</td>
+<td align="right">-3.51688</td>
+<td align="right">-9.61047</td>
+<td align="right">NA</td>
+<td align="right">7.57444</td>
+<td align="right">6.63331</td>
+<td align="right">-3.84972</td>
+<td align="right">-8.84150</td>
+<td align="right">7.56019</td>
+<td align="right">8.93899</td>
+<td align="right">-8.28693</td>
+<td align="right">-0.28019</td>
+<td align="right">-8.61575</td>
+<td align="right">5.21204</td>
+<td align="right">5.31669</td>
+<td align="right">-7.43217</td>
+<td align="right">-0.49435</td>
+<td align="right">NA</td>
+<td align="right">-4.69887</td>
+<td align="right">7.44866</td>
+<td align="right">NA</td>
+<td align="right">-5.76404</td>
+<td align="right">0.78592</td>
+<td align="right">4.59862</td>
+<td align="right">-5.97698</td>
+<td align="right">-3.76567</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section level4">
+<h4 id="look-at-metadata">Look at metadata<a class="anchor" aria-label="anchor" href="#look-at-metadata"></a>
+</h4>
+<p>If you loaded metadata alongside the assay, it will be stored in the
+<code>rowData</code> slot of the <code>SummarizedExperiment</code>
+object. The <code>rownames</code> are the drug identifiers and
+<code>rowData</code> is the associated metadata.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">metadata</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">rowData</a></span><span class="op">(</span><span class="va">dra</span><span class="op">)</span></span>
+<span><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">metadata</span>, n <span class="op">=</span> <span class="fl">3L</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<table style="width:100%;" class="table">
+<colgroup>
+<col width="7%">
+<col width="11%">
+<col width="17%">
+<col width="18%">
+<col width="39%">
+<col width="6%">
+</colgroup>
+<thead><tr class="header">
+<th align="left"></th>
+<th align="left">Arbitrary.ID</th>
+<th align="left">Drug.Name..Brand.</th>
+<th align="left">Drug.Name..Generic.</th>
+<th align="left">Drug.Company</th>
+<th align="left">Dosage</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td align="left">DRG-001</td>
+<td align="left">DRG-001</td>
+<td align="left">Tobramycin Sulfate</td>
+<td align="left">TOBRAMYCIN SULFATE</td>
+<td align="left"></td>
+<td align="left">9.1mg</td>
+</tr>
+<tr class="even">
+<td align="left">DRG-002</td>
+<td align="left">DRG-002</td>
+<td align="left">Aptivus</td>
+<td align="left">tipranavir</td>
+<td align="left">Boehringer Ingelheim Pharmaceuticals, Inc.</td>
+<td align="left">6.0mg</td>
+</tr>
+<tr class="odd">
+<td align="left">DRG-003</td>
+<td align="left">DRG-003</td>
+<td align="left">Ketoprofen</td>
+<td align="left">ketoprofen</td>
+<td align="left"></td>
+<td align="left">5.1mg</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ This is not to be confused with the <code>metadata()</code>
+function or slot. This returns a DataFrame of any metadata associated
+with the assay, not the samples themselves. This could contain anything
+from citation information, data about the file source, etc.</p>
+</blockquote>
+</div>
+</div>
+</div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside>
 </div>
 
 

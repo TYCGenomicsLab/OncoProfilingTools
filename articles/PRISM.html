@@ -37,7 +37,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-vignettes">
 <li><h6 class="dropdown-header" data-toc-skip>Assays</h6></li>
     <li><a class="dropdown-item" href="../articles/RNAAssay.html">RNA</a></li>
-    <li><a class="dropdown-item" href="../articles/DrugResponseAssay.html">Drug Response</a></li>
+    <li><a class="dropdown-item" href="../articles/DrugResponseAssay.html">Drug Response (LFC)</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>PRISM</h6></li>
     <li><a class="dropdown-item" href="../articles/PRISM.html">Using PRISM</a></li>
@@ -80,7 +80,9 @@ a new R chunk,</p>
 <p>The code chunk appears:</p>
 <p>Type any R code in the chunk, for example:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">mycars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">within</a></span><span class="op">(</span><span class="va">mtcars</span>, <span class="op">{</span> <span class="va">cyl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">ordered</a></span><span class="op">(</span><span class="va">cyl</span><span class="op">)</span> <span class="op">}</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">mycars</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/with.html" class="external-link">within</a></span><span class="op">(</span><span class="va">mtcars</span>, <span class="op">{</span></span>
+<span>  <span class="va">cyl</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">ordered</a></span><span class="op">(</span><span class="va">cyl</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span></span>
 <span><span class="va">mycars</span></span></code></pre></div>
 <pre><code><span><span class="co">##                      mpg cyl  disp  hp drat    wt  qsec vs am gear carb</span></span>
 <span><span class="co">## Mazda RX4           21.0   6 160.0 110 3.90 2.620 16.46  0  1    4    4</span></span>
