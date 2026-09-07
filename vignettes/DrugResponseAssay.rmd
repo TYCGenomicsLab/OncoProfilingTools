@@ -56,14 +56,14 @@ dra
 The raw values are stored in the `assays` slot of the `SummarizedExperiment` object. Accessing them is relatively straightforward. In this example, we'll just print the first 3 rows of the matrix as an example. You should see drug names as row names and cell line names as column names.
 ```{r example-raw-matrix, eval=TRUE, message=FALSE, warning=FALSE}
 dra_matrix <- assays(dra)$response # TODO: future function will make this easier (i.e. get_values(...)
-knitr::kable(head(dra_matrix, n=3L))
+knitr::kable(head(dra_matrix, n = 3L))
 ```
 
 ### Look at metadata
 If you loaded metadata alongside the assay, it will be stored in the `rowData` slot of the `SummarizedExperiment` object. The `rownames` are the drug identifiers and `rowData` is the associated metadata.
 ```{r example-rowdata, eval=TRUE, message=FALSE, warning=FALSE}
 metadata <- rowData(dra)
-knitr::kable(head(metadata, n=3L))
+knitr::kable(head(metadata, n = 3L))
 ```
 
 > ⚠️ This is not to be confused with the `metadata()` function or slot. This returns a DataFrame of any metadata associated with the assay, not the samples themselves. This could contain anything from citation information, data about the file source, etc.

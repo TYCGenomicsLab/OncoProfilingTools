@@ -66,7 +66,7 @@ We've created an example file with a 5x5 table. Rows contain unique sample names
 library(dplyr)
 ```
 ```{r, eval=TRUE}
-head(read.csv("assets/rna_example.csv", header = TRUE, sep=","))
+head(read.csv("assets/rna_example.csv", header = TRUE, sep = ","))
 ```
 
 Now let's load the data into an OncoExperiment:
