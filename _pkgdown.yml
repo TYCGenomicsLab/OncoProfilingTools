@@ -23,7 +23,7 @@ navbar:
         - text: "Assays"
         - text: "RNA"
           href: articles/RNAAssay.html
-        - text: "Drug Response"
+        - text: "Drug Response (LFC)"
           href: articles/DrugResponseAssay.html
         - text: "-------"
         - text: "PRISM"

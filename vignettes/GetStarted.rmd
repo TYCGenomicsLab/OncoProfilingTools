@@ -1,26 +1,85 @@
 ---
-title: "R Notebook"
+title: "Getting started"
+date: "2026-09-01"
 output: html_document
 ---
 
-The [R plugin](https://www.jetbrains.com/help/pycharm/r-plugin-support.html) for IntelliJ-based IDEs provides
-handy capabilities to work with the [R Markdown](https://www.jetbrains.com/help/pycharm/r-markdown.html) files.
-To [add](https://www.jetbrains.com/help/pycharm/r-markdown.html#add-code-chunk) a new R chunk,
-```{r}
-```
-position the caret at any line or the code chunk, then click "+".
-
-The code chunk appears:
-```{r}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ```
 
-Type any R code in the chunk, for example:
-```{r}
-mycars <- within(mtcars, {
-  cyl <- ordered(cyl)
-})
-mycars
+
+# Understanding the structure
+
+Before starting to interact with the package you should understand the structure of the objects you'll be working with. OPT borrows and expands from well-known Bioconductor packages for dealing with large-scale experimental data. The following two objects are the most important to understand:
+
+1. **`OncoExperiment`** - a class that inherits from [MultiAssayExperiment](https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html). It contains all the information needed to perform downstream analyses in the form of assays.
+2. **`*Assay`** - a class that inherits from [SummarizedExperiment](https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html). Different types of assays exist to support loading various sources with different structures. Some examples include: [`RNAAssay`](), [`DrugResponseAssay`](), and [`PRISMAssay`]().
+
+
+# `OncoExperiment`
+The `OncoExperiment` is the core object that contains all the information. It harmonizes all the assays (or experiments) together and maps them to the samples. OncoExperiment is primarily a `MultiAssayExperiment` (`MAE`) with a few additional methods to deal with oncogenic data. Although this guide will summarize the structure to a degree, the authors of `MAE` have created some wonderful [quick start guides](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/QuickStartMultiAssay.html) and [cheatsheets](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/MultiAssayExperiment_cheatsheet.html) with in-depth information. Please refer to these if you ever need help navigating an `OncoExperiment` you've created.
+
+
+> ![](assets/mae.png)  <br>
+> Credit: ["Software For The Integration of Multi-Omics Experiments In Bioconductor." Marcel Ramos et. al.](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/MultiAssayExperiment.html)
+
+## Slots
+A quick overview of the slots you should know about in an `OncoExperiment`:
+
+- **`project_name`** - The name of the project for your own reference.
+- **`ExperimentList`** - Contains all ID-based experimental data. An instance of `ExperimentList`. Access with `experiments(OncoExperiment)`.
+- **`colData`** - Contains all sample-level metadata. An instance of `DataFrame`. Access with `colData(OncoExperiment)` or `$`.
+- **`sampleMap`** - Helps to relate experiment-specific sample naming or replicate observations to the row names in `colData`. Access with `sampleMap(OncoExperiment)`.
+- **`metadata`** - Storing any additional metadata about the study. This is free to include anything. We store some basic information as a `list`. Individual assays can store additional metadata in their own `metadata` slot. Access with `metadata(OncoExperiment)`.
+
+This quick start guide by the Waldron Lab has a lot more great information: [Quick Start Guide](https://bioconductor.org/packages/release/bioc/vignettes/MultiAssayExperiment/inst/doc/QuickStartMultiAssay.html). There is also a lot of useful examples showing these accessors in use.
+
+```{r mini-demo, eval = TRUE, message = FALSE, warning = FALSE, include=FALSE}
+library(OncoProfilingTools)
+library(MultiAssayExperiment)
+library(SummarizedExperiment)
+data(miniACC) # loads example
+miniACC
+
+colData(miniACC)[4:8, 4:8]
+experiments(miniACC)
+# You can also access the expeirment itself by its' name
+experiments(miniACC)$RNASeq2GeneNorm
+# Shows you how the unique names relate between experiments to link data
+sampleMap(miniACC)
+metadata(miniACC)
 ```
 
-Now, click the **Run** button on the chunk toolbar to [execute](https://www.jetbrains.com/help/pycharm/r-markdown.html#run-r-code) the chunk code. The result should be placed under the chunk.
-Click the **Knit and Open Document** to build and preview an output.
+
+
+## Creating an `OncoExperiment`
+```{r, eval = TRUE}
+exp <- OncoExperiment(project_name = "Murine RNA-Seq 04")
+exp
+```
+
+## Subsetting
+To demonstrate accessing the data in an `OncoExperiment`, let's construct a simple example with an `RNAAssay`.
+We've created an example file with a 5x5 table. Rows contain unique sample names and colums contain unique gene names. The values are random numbers between 1 and 10. We can peek at it to demonstrate how it is structured:
+```{r, eval=TRUE, include=FALSE}
+library(dplyr)
+```
+```{r, eval=TRUE}
+head(read.csv("assets/rna_example.csv", header = TRUE, sep=","))
+```
+
+Now let's load the data into an OncoExperiment:
+```{r, eval=TRUE}
+# let's create a simple 5x5 table to load
+example <- OncoExperiment(project_name = "Example")
+example <- load_assays(example, AssayTypes$RNA, data = "assets/rna_example.csv")
+example
+```
+
+### Single Bracket
+Test Test
+
+# `*Assay`
+
+<img src="assets/se.png" width="500px"/>
