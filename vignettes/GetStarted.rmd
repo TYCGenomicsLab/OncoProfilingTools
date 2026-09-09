@@ -72,9 +72,9 @@ head(read.csv("assets/rna_example.csv", header = TRUE, sep = ","))
 Now let's load the data into an OncoExperiment:
 ```{r, eval=TRUE}
 example <- OncoExperiment(project_name = "Example")
-example <- load_assays(example, 
-                       AssayTypes$RNA, 
-                       data = "assets/rna_example.csv", 
+example <- load_assays(example,
+                       AssayTypes$RNA,
+                       data = "assets/rna_example.csv",
                        metadata = "assets/rna_metadata_example.csv")
 example
 ```
@@ -132,6 +132,3 @@ AssayTypes$DoesNotExist # if you make a typo, you'll get an error
 
 sessionInfo()
 ```
-
-
-
