@@ -61,7 +61,7 @@ exp
 
 ## Subsetting
 To demonstrate accessing the data in an `OncoExperiment`, let's construct a simple example with an `RNAAssay`.
-We've created an example file with a 5x5 table. Rows contain unique sample names and colums contain unique gene names. The values are random numbers between 1 and 10. We can peek at it to demonstrate how it is structured:
+We've created an example file with a 50x50 table. Rows contain unique sample names and colums contain unique gene names. The values are random numbers between 1 and 10. We can peek at it to demonstrate how it is structured:
 ```{r, eval=TRUE, include=FALSE}
 library(dplyr)
 ```
@@ -71,15 +71,67 @@ head(read.csv("assets/rna_example.csv", header = TRUE, sep = ","))
 
 Now let's load the data into an OncoExperiment:
 ```{r, eval=TRUE}
-# let's create a simple 5x5 table to load
 example <- OncoExperiment(project_name = "Example")
-example <- load_assays(example, AssayTypes$RNA, data = "assets/rna_example.csv")
+example <- load_assays(example, 
+                       AssayTypes$RNA, 
+                       data = "assets/rna_example.csv", 
+                       metadata = "assets/rna_metadata_example.csv")
 example
 ```
 
-### Single Bracket
-Test Test
+### Logical Indexing
+You can use logical operations to subset data based on the rows or columns using the `$` operator. Like in other libraries, you can use `==`, `!=`, `<`, `>`, `<=`, and `>=` to filter your data. All experiments and assays will be automatically harmonized.
+
+In our example data, the metadata file contains a column called `AgeCategory`. Let's say we want to subset by all samples where patients are adults and filter out unknown or pediatric samples. We can do this by creating a logical vector and using it to subset the `OncoExperiment` object:
+```{r, eval=TRUE}
+is_metastatic <- example$PrimaryOrMetastasis == "Metastatic" # returns logical vector
+metastatic <- example[, is_metastatic]
+metastatic
+```
+We removed ~30 samples and were left with only samples that met our criterion. If we had additional assays, they would have been simultaneously reduced.
+
+### Standard Indexing
+If you require more fine-grained control, you can subset by specific indices:
+```{r, eval=FALSE}
+OncoExperiment[i = rownames, j = primary or colnames, k = assay]
+```
+
+For example, we can do the same example as above by using standard indexing:
+```{r, eval=TRUE}
+example[, example$PrimaryOrMetastasis == "Metastatic", "RNA"]
+```
+
+### Functions
+`MultiAssayExperiment` has a number of useful functions for subsetting or intersecting. The previous examples will likely be the most common ones you'll use. For more specific use cases, please refer to the [MultiAssayExperiment documentation](https://waldronlab.io/MultiAssayExperiment/reference/subsetBy.html).
 
 # `*Assay`
+A select number of data formats for different types of experiments are currently supported and have been inspired by the oncogenic files hosted at [DepMap](https://depmap.org/portal/). Currently, we support:
 
-<img src="assets/se.png" width="500px"/>
+| Name                                                    | Purpose                                                                                                                                                           |
+|:--------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [`RNAAssay`](/articles/RNAAssay.html)                   | Cell line vs. gene expression matrix for RNA-seq data. Useful for understanding gene expression patterns in different cell lines.                                 |
+| [`DrugResponseAssay`](/articles/DrugResponseAssay.html) | Drugs vs cell lines with log-fold change drug response values. Useful for [PRISM](https://depmap.org/repurposing/)-like data to understand therapeutic responses. |
+
+
+## Structure
+All assays have their own S4 class but ultimately inherit from [`SummarizedExperiment`](https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html). This means that you can use the same accessors and methods to interact with them. For example, you can use `assays()` to access the raw values, `rowData()` to access any metadata associated with the rows, and `colData()` to access any metadata associated with the columns. Here is a helpful graphic:
+
+> <img src="assets/se.png" width="500px"/>>
+> Credit: [Morgan M, Obenchain V, Hester J, Pagès H (2026). SummarizedExperiment: A container (S4 class) for matrix-like assays. doi:10.18129/B9.bioc.SummarizedExperiment. R package version 1.42.0, https://bioconductor.org/packages/SummarizedExperiment.](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html)
+
+
+## Enumerator
+This package provides a helpful enumerator for seeing and accessing all available assay types. This just helps with code suggestions, prevents typos, and makes it easy to see what's available.
+```{r, eval=TRUE, error = TRUE}
+AssayTypes # see all options
+AssayTypes$RNA # easy to access their character vector
+AssayTypes$DoesNotExist # if you make a typo, you'll get an error
+```
+
+```{r, eval=TRUE}
+
+sessionInfo()
+```
+
+
+
