@@ -32,7 +32,8 @@ Imports:
     immunedeconv,
     msigdbr
 Remotes:
-    ElianHugh/enumr@main
+    ElianHugh/enumr@main,
+    omnideconv/immunedeconv
 Suggests:
     testthat (>= 3.0.0),
     roxygen2,
