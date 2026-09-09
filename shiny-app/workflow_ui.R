@@ -108,6 +108,7 @@ workflow_page_ui <- function(mode) {
               "interpretation_provider",
               "Interpretation mode",
               choices = c(
+                "Rules-based · no AI" = "computed",
                 "Local Ollama · private" = "ollama",
                 "OpenAI Premium · external" = "openai",
                 "Compare both · side by side" = "compare"
@@ -130,6 +131,16 @@ workflow_page_ui <- function(mode) {
               div(
                 class = "openai-premium-panel",
                 div(class = "premium-provider-heading", span("PREMIUM PROVIDER"), strong("OpenAI Responses API"), uiOutput("openai_key_status")),
+                passwordInput(
+                  "openai_api_key",
+                  "OpenAI API key (session only)",
+                  value = "",
+                  placeholder = "Paste a new sk-... or sk-proj-... key"
+                ),
+                p(
+                  class = "provider-privacy-note provider-key-note",
+                  "Used only by this running local session. The key is removed before temporary analysis files, reports, logs, or interpretation caches are written."
+                ),
                 div(
                   class = "ollama-settings-grid",
                   selectInput(
@@ -147,13 +158,13 @@ workflow_page_ui <- function(mode) {
                 ),
                 checkboxInput(
                   "openai_data_consent",
-                  "I approve sending the structured result digest to the OpenAI API. No raw uploaded file or patient identifier is sent.",
+                  "Required: I approve sending the structured result digest to the OpenAI API. No raw uploaded file or patient identifier is sent.",
                   value = FALSE
                 ),
-                p(class = "provider-privacy-note provider-external-note", "The API key is read only from OPENAI_API_KEY on the R server. It is never entered in this page, cached, logged, or included in reports. Requests use store=false.")
+                p(class = "provider-privacy-note provider-external-note", "Paste the key only in this browser field. The terminal never requests it. Requests use store=false, and the key is discarded when this local session ends.")
               )
             ),
-            p("Every mode uses the same deterministic observations, versioned JSON contract, grounding checks, sanitization, terminal-state handling, and reproducible report provenance.")
+            p("Rules-based mode uses no language model or API key. Every mode uses the same deterministic observations, grounding checks, and reproducible report provenance.")
           )
         ),
         actionButton("run_analysis", paste("Run", title), class = "primary-button", icon = icon("play"))
@@ -169,8 +180,8 @@ build_app_ui <- function() {
     tags$head(
       tags$title("OncoProfilingTools"),
       tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
-      tags$link(rel = "stylesheet", href = "styles.css?v=openai-provider-2"),
-      tags$link(rel = "stylesheet", href = "pastel.css?v=openai-provider-2"),
+      tags$link(rel = "stylesheet", href = "styles.css?v=openai-provider-3"),
+      tags$link(rel = "stylesheet", href = "pastel.css?v=openai-provider-3"),
       tags$script(src = "status.js?v=compact-progress-1")
     ),
     div(

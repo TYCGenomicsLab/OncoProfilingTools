@@ -2,7 +2,7 @@
 
 OncoProfilingTools is an R package and Shiny research application for oncology profiling workflows. The package provides Bioconductor-style assay containers and DepMap/PRISM loading utilities. The Shiny application opens with two intentionally separate routes: **Biomarker Discovery** (nine agents) and **Drug Sensitivity** (one dedicated pharmacogenomic agent).
 
-The Results Center combines deterministic R analyses with optional biological interpretation from either a local Ollama server or the OpenAI Responses API. Observed-result statements are always computed from saved tables and displayed separately from the model's interpretive context. Ollama is restricted to loopback hosts; OpenAI requires an environment-only API key plus explicit per-session data consent. The deterministic layer remains available whenever either provider is disabled, unavailable, times out, or returns an invalid/version-mismatched response.
+The Results Center combines deterministic R analyses with optional biological interpretation from either a local Ollama server or the OpenAI Responses API. Observed-result statements are always computed from saved tables and displayed separately from the model's interpretive context. Ollama is restricted to loopback hosts; OpenAI requires a session-only key entered in the local browser plus explicit data consent. The terminal never requests the key. The deterministic layer remains available whenever either provider is disabled, unavailable, times out, or returns an invalid/version-mismatched response.
 
 > Research use only. Biological findings require expert validation.
 
@@ -42,10 +42,11 @@ flowchart LR
     H --> K["600 ms progress polling"]
     J --> L["Deterministic observed-result exchanges"]
     L --> M{"Interpretation mode"}
+    M -->|"Rules-based"| O["Computed full-result scientific summary"]
     M -->|"Local"| N["Ollama interpretation"]
     M -->|"Premium"| Q["OpenAI interpretation"]
     M -->|"Compare"| R["Same digest to both providers"]
-    M -->|"provider failure"| O["Computed full-result scientific summary"]
+    M -->|"provider failure"| O
     L --> P["Cross-agent and Drug-pathway synthesis"]
 ```
 
@@ -79,10 +80,11 @@ The application:
 
 When Drug Sensitivity and one or more pathway/systems agents are selected, `build_drug_pathway_bridge()` exposes their concise outputs together. This is an architecture hook, not a causal model: matched samples and an explicit statistical association method are still required before connecting a compound response to pathway activity.
 
-Three model modes are available:
+Four interpretation modes are available:
 
+- **Rules-based** uses deterministic result summaries only and requires neither a language model nor an API key.
 - **Local Ollama** sends the structured digest only to the configured loopback URL. Accepted hostnames are `localhost`, `127.0.0.1`, and `[::1]`.
-- **OpenAI Premium** sends only the compact structured result digest to the OpenAI Responses API. It never uploads the original input file, never places the API key in the page, cache, report, or worker settings, and sets `store=false` on every request.
+- **OpenAI Premium** sends only the compact structured result digest to the OpenAI Responses API. The key is accepted only by the session-only local-browser field and is never written to a cache, report, log, or worker-settings file. Every request sets `store=false`.
 - **Compare both** sends the same versioned digest and contract to both providers, preserves both narratives, and uses a clearly labeled primary narrative. Longer or more fluent prose is not treated as evidence of scientific correctness.
 
 OpenAI mode requires explicit consent in the UI. Do not use identifiable patient data or protected health information without the approvals and data-processing terms required by your institution. Existing scientific backends retain their prior behavior: modules such as ChEA, STRING, KEGG, and WikiPathways may contact public reference services, so use only locally cached/offline-compatible modules when the complete scientific workflow must remain offline.
@@ -91,16 +93,16 @@ The OpenAI request schema is materialized for exactly the agents selected in the
 
 ### Secure OpenAI setup
 
-An OpenAI Platform API key and API billing are required; a ChatGPT subscription alone does not configure this application. Set the key in the same Terminal session before starting Shiny. Never paste the key into the app or commit it to the repository.
+An OpenAI Platform API key and API billing are required; a ChatGPT subscription alone does not configure this application. Start Shiny without a key:
 
 ```bash
 cd /Users/bandaarjunreddy/Research/OncoProfilingTools
-export OPENAI_API_KEY="your-platform-api-key"
-export ONCOPROFILING_OPENAI_MODEL="gpt-5.6-terra"
 Rscript --vanilla -e 'shiny::runApp("shiny-app", host="127.0.0.1", port=3838, launch.browser=TRUE)'
 ```
 
-Optional controls are `ONCOPROFILING_OPENAI_REASONING`, `ONCOPROFILING_OPENAI_TIMEOUT`, and `ONCOPROFILING_OPENAI_MAX_OUTPUT`. The default Premium model is `gpt-5.6-terra`; the UI also offers Sol for maximum quality and Luna for a lower-cost comparison. Reported token cost is an estimate based on rates encoded in the app version and should be checked against current OpenAI Platform pricing.
+Choose **OpenAI Premium** or **Compare both** in Chrome. Only then does the OpenAI panel appear. Paste the key into its password field, approve sending the structured digest, and run the analysis. The key is passed only to the local background worker and is discarded when the Shiny session ends. Do not commit a key to the repository or use this field on a remotely hosted copy of the app without a proper server-side secret-management design.
+
+The default Premium model is `gpt-5.6-terra`; the UI also offers Sol for maximum quality and Luna for a lower-cost comparison. Reported token cost is an estimate based on rates encoded in the app version and should be checked against current OpenAI Platform pricing.
 
 See [`docs/results-center-architecture.md`](docs/results-center-architecture.md) for the exchange contract, safety behavior, and extension points.
 
@@ -126,7 +128,8 @@ The active UI gate requires:
 
 - at least 10 columns in the uploaded table;
 - at least 10 cleaned genes from a recognized gene column; and
-- at least two columns whose values are at least 80% numeric.
+- at least two columns whose values are at least 80% numeric; and
+- no recognized differential-expression statistic fields such as FDR, adjusted p-value, log fold change, or ranking score.
 
 Compatible modules: GSVA and Immune Deconvolution.
 
@@ -227,7 +230,7 @@ ollama pull llama3.1:8b
 ollama serve
 ```
 
-On macOS, the Ollama application normally starts the local service automatically. If `ollama serve` reports `bind: address already in use`, the service is already running; verify it with `ollama list` instead of starting a second server. For Premium or Compare mode, also export `OPENAI_API_KEY` in the same Terminal that starts Shiny.
+On macOS, the Ollama application normally starts the local service automatically. If `ollama serve` reports `bind: address already in use`, the service is already running; verify it with `ollama list` instead of starting a second server. OpenAI keys are not entered in Terminal.
 
 Then start the application from another terminal:
 
@@ -265,10 +268,13 @@ If the repository is cloned elsewhere, replace the path in the alias.
 4. Review compatibility badges; incompatible agents are disabled.
 5. Leave compatible agents selected or clear agents you do not want to run, then select the route-specific run button.
 6. Monitor the compact selected-agent status strip.
-7. Optionally expand local interpretation settings. The default model is `llama3.1:8b` with a 300-second terminal timeout.
-8. Review deterministic **Observed results** first, then the separately labeled local interpretive context.
-9. Download individual full-precision CSVs/reports, the Combined HTML Report, or the complete ZIP bundle.
-10. Validate every biological conclusion independently; the application is for research use only.
+7. Expand interpretation settings and choose Rules-based, Local Ollama, OpenAI Premium, or Compare both.
+8. For OpenAI Premium or Compare only, paste the API key in the browser password field and approve sending the structured digest. No terminal key is required.
+9. Review deterministic **Observed results** first, then the separately labeled interpretive context.
+10. Download individual full-precision CSVs/reports, the Combined HTML Report, or the complete ZIP bundle.
+11. Validate every biological conclusion independently; the application is for research use only.
+
+For reviewer-ready module, frontend, and CMS4 test cases, see [`docs/TESTING.md`](docs/TESTING.md).
 
 ## Package data model
 

@@ -146,6 +146,8 @@ testthat::test_that("rich Ollama prompt requests distinct interpretation section
   testthat::expect_match(prompt, "validation_priorities", fixed = TRUE)
   testthat::expect_match(prompt, "general biological knowledge", fixed = TRUE)
   testthat::expect_match(prompt, "Begin every biological_context exactly with", fixed = TRUE)
+  testthat::expect_match(prompt, "plain-language interpretation", fixed = TRUE)
+  testthat::expect_match(prompt, "technical interpretation for researchers and clinicians", fixed = TRUE)
   testthat::expect_false(grepl("Keep each summary under 100 words", prompt, fixed = TRUE))
 })
 

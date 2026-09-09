@@ -21,6 +21,7 @@ shiny-app/runtime-test/
 .vscode/
 
 # Local backups and generated delivery artifacts
+artifacts/
 backup-before-*/
 repair-backup/
 old-results-backup*/

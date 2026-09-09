@@ -48,7 +48,7 @@ with_test_openai_key <- function(code) {
   force(code)
 }
 
-testthat::test_that("OpenAI settings require an environment key and explicit data consent", {
+testthat::test_that("OpenAI settings require a browser session key and explicit data consent", {
   old <- Sys.getenv("OPENAI_API_KEY", unset = NA_character_)
   on.exit(
     {
@@ -57,25 +57,51 @@ testthat::test_that("OpenAI settings require an environment key and explicit dat
     add = TRUE
   )
 
-  Sys.unsetenv("OPENAI_API_KEY")
+  # A shell variable must not bypass the browser-only key flow.
+  Sys.setenv(OPENAI_API_KEY = "sk-test-terminal-key-must-be-ignored")
   testthat::expect_match(
     validate_openai_settings(list(provider = "openai", openai_data_consent = TRUE)),
-    "not configured",
+    "Paste an OpenAI API key",
     fixed = TRUE
   )
 
-  Sys.setenv(OPENAI_API_KEY = "sk-test-never-serialize-this-value")
   testthat::expect_match(
-    validate_openai_settings(list(provider = "openai", openai_data_consent = FALSE)),
+    validate_openai_settings(list(
+      provider = "openai",
+      openai_key_available = TRUE,
+      openai_data_consent = FALSE
+    )),
     "Confirm",
     fixed = TRUE
   )
-  testthat::expect_null(validate_openai_settings(list(provider = "openai", openai_data_consent = TRUE)))
+  testthat::expect_null(validate_openai_settings(list(
+    provider = "openai",
+    openai_key_available = TRUE,
+    openai_data_consent = TRUE
+  )))
 
   settings <- normalise_interpretation_settings(list(provider = "openai", openai_data_consent = TRUE))
   captured <- paste(capture.output(str(settings)), collapse = " ")
-  testthat::expect_false(grepl("sk-test-never-serialize-this-value", captured, fixed = TRUE))
+  testthat::expect_false(grepl("sk-test-terminal-key-must-be-ignored", captured, fixed = TRUE))
+  testthat::expect_false(settings$openai_key_available)
+})
+
+testthat::test_that("OpenAI settings accept a session key availability flag without storing the key", {
+  old <- Sys.getenv("OPENAI_API_KEY", unset = NA_character_)
+  on.exit({
+    if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
+  }, add = TRUE)
+  Sys.unsetenv("OPENAI_API_KEY")
+
+  settings <- normalise_interpretation_settings(list(
+    provider = "openai",
+    openai_key_available = TRUE,
+    openai_data_consent = TRUE
+  ))
+
   testthat::expect_true(settings$openai_key_available)
+  testthat::expect_null(validate_openai_settings(settings))
+  testthat::expect_false("openai_api_key" %in% names(settings))
 })
 
 testthat::test_that("Responses API text extraction handles canonical output content", {
@@ -116,7 +142,7 @@ testthat::test_that("OpenAI interpretation uses the same grounding contract with
     }
     bundle <- generate_openai_interpretation_bundle(
       list(go = data.frame(Description = c("DNA repair", "Cell cycle"))),
-      settings = list(provider = "openai", openai_data_consent = TRUE),
+      settings = list(provider = "openai", openai_key_available = TRUE, openai_data_consent = TRUE),
       request_fn = mock_openai
     )
 
@@ -151,6 +177,7 @@ testthat::test_that("Compare mode preserves both providers and selects OpenAI wh
         enabled = TRUE,
         host = "http://127.0.0.1:11434",
         model = "llama3.1:8b",
+        openai_key_available = TRUE,
         openai_data_consent = TRUE
       ),
       ollama_request_fn = local_mock,
@@ -172,7 +199,7 @@ testthat::test_that("OpenAI failures terminate honestly with deterministic obser
   with_test_openai_key({
     bundle <- generate_openai_interpretation_bundle(
       list(go = data.frame(Description = "DNA repair")),
-      settings = list(provider = "openai", openai_data_consent = TRUE),
+      settings = list(provider = "openai", openai_key_available = TRUE, openai_data_consent = TRUE),
       request_fn = function(prompt, settings) stop("401 invalid token")
     )
     testthat::expect_true(bundle$source %in% c("openai_error", "openai_unavailable"))
@@ -185,7 +212,7 @@ testthat::test_that("OpenAI HTTP failures retain safe actionable diagnostics", {
   with_test_openai_key({
     bundle <- generate_openai_interpretation_bundle(
       list(go = data.frame(Description = "DNA repair")),
-      settings = list(provider = "openai", openai_data_consent = TRUE),
+      settings = list(provider = "openai", openai_key_available = TRUE, openai_data_consent = TRUE),
       request_fn = function(prompt, settings) {
         stop(new_openai_api_error(
           "Invalid schema containing sk-secret-should-not-escape",
@@ -213,6 +240,7 @@ testthat::test_that("failed provider comparisons do not present computed prose a
         enabled = TRUE,
         host = "http://127.0.0.1:11434",
         model = "llama3.1:8b",
+        openai_key_available = TRUE,
         openai_data_consent = TRUE
       ),
       ollama_request_fn = function(prompt, settings) openai_test_payload(),

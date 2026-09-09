@@ -43,6 +43,76 @@ report_list_html <- function(values, ordered = FALSE, empty = "Not available for
   paste0("<", tag, ">", paste0("<li>", html_escape_value(values), "</li>", collapse = ""), "</", tag, ">")
 }
 
+report_disclosure_html <- function(summary, content, class = "", open = FALSE) {
+  paste0(
+    "<details class='report-disclosure ", html_escape_value(class), "'",
+    if (isTRUE(open)) " open" else "", "><summary>",
+    html_escape_value(summary), "</summary><div class='disclosure-body'>",
+    content, "</div></details>"
+  )
+}
+
+report_prompt_without_run_data <- function(prompt) {
+  prompt <- as.character(prompt %or_else% "")
+  prompt <- gsub(
+    "(?s)(DATA_START\\n).*?(\\nDATA_END)",
+    "\\1[STRUCTURED RESULT DIGEST INSERTED HERE AT RUN TIME]\\2",
+    prompt,
+    perl = TRUE
+  )
+  prompt <- gsub(
+    "(?s)(RESULT_DIGEST_START\\n).*?(\\nRESULT_DIGEST_END)",
+    "\\1[STRUCTURED RESULT DIGEST INSERTED HERE AT RUN TIME]\\2",
+    prompt,
+    perl = TRUE
+  )
+  gsub(
+    "(?s)(STRUCTURED_DRAFT_START\\n).*?(\\nSTRUCTURED_DRAFT_END)",
+    "\\1[VALIDATED STRUCTURED DRAFT INSERTED HERE AT RUN TIME]\\2",
+    prompt,
+    perl = TRUE
+  )
+}
+
+report_prompt_transparency_html <- function(bundle, selected_agents) {
+  exchanges <- bundle$exchanges %or_else% list()
+  if (!length(exchanges)) {
+    exchanges <- lapply(intersect(selected_agents, names(result_files)), function(key) {
+      build_agent_exchange(key, safe_result_csv(result_files[[key]]$csv))
+    })
+  }
+  if (!length(exchanges)) return("")
+
+  rule_guidance <- paste(
+    "No language-model prompt runs in rules-based mode. The application computes text directly from saved result tables using the following rules.",
+    "",
+    "AGENT-SPECIFIC RULES:",
+    paste(vapply(exchanges, function(exchange) {
+      paste0(toupper(exchange$agent_id), ": ", agent_specific_guidance(exchange$agent_id))
+    }, character(1)), collapse = "\n\n"),
+    "",
+    scientific_interpretation_rules(),
+    "",
+    ian_integrated_prompt_guidance(),
+    sep = "\n"
+  )
+  structured_prompt <- report_prompt_without_run_data(build_ollama_prompt(exchanges))
+  narrative_prompt <- report_prompt_without_run_data(build_deep_narrative_prompt(exchanges, bundle))
+
+  paste0(
+    "<section id='prompt-transparency' class='compact-section'><span class='kicker'>PROMPT TRANSPARENCY</span>",
+    "<h2>Prompts and rules used</h2>",
+    "<p class='section-copy'>Rules-based mode uses deterministic code and no LLM. Ollama and OpenAI receive the same structured interpretation prompt. A second shared prompt asks the selected provider for the longer scientific narrative. Run-specific JSON is replaced below with an explicit placeholder; all instructions are shown verbatim.</p>",
+    "<div class='prompt-mode-grid'>",
+    "<div><h3>Rules-based interpretation</h3><p class='mode-note'><strong>No model call.</strong> Output is generated from recorded rows, statistics, and fixed safeguards.</p>",
+    report_disclosure_html("View exact deterministic rules", paste0("<pre>", html_escape_value(rule_guidance), "</pre>"), "prompt-disclosure"), "</div>",
+    "<div><h3>Ollama and OpenAI Premium</h3><p class='mode-note'><strong>Same primary prompt.</strong> Provider settings differ, but the scientific instructions and result digest are shared.</p>",
+    report_disclosure_html("View exact structured interpretation prompt", paste0("<pre>", html_escape_value(structured_prompt), "</pre>"), "prompt-disclosure"),
+    report_disclosure_html("View exact detailed-narrative prompt", paste0("<pre>", html_escape_value(narrative_prompt), "</pre>"), "prompt-disclosure"), "</div>",
+    "</div><p class='note'>OpenAI Premium here means the OpenAI Responses API configured by the application; it is separate from a ChatGPT subscription.</p></section>"
+  )
+}
+
 report_deep_narrative_html <- function(value) {
   lines <- strsplit(as.character(value %or_else% ""), "\\r?\\n", perl = TRUE)[[1L]]
   lines <- lines[nzchar(trimws(lines))]
@@ -244,7 +314,7 @@ report_pathway_overlap_html <- function() {
   frequencies <- sort(table(all_genes), decreasing = TRUE)
   shared <- frequencies[frequencies >= 2L]
   shared_text <- if (length(shared)) {
-    paste0(names(utils::head(shared, 15L)), " (", as.integer(utils::head(shared, 15L)), " databases)")
+    paste0(names(utils::head(shared, 8L)), " (", as.integer(utils::head(shared, 8L)), " databases)")
   } else character()
   unique_text <- vapply(names(sets), function(key) {
     others <- unique(unlist(sets[setdiff(names(sets), key)], use.names = FALSE))
@@ -255,7 +325,7 @@ report_pathway_overlap_html <- function() {
   paste0(
     "<div class='evidence-card'><p><strong>Shared member genes</strong> are genes appearing in significant result rows from two or more pathway databases.</p>",
     report_list_html(shared_text, empty = "No member gene occurred in two or more pathway result sets."),
-    "<p><strong>Database-specific members</strong></p>", report_list_html(unique_text),
+    report_disclosure_html("View database-specific members", report_list_html(unique_text), "technical-disclosure"),
     "<p class='note'>This is a deterministic overlap of the complete saved significant-result tables. It is not independent replication and does not establish pathway activation.</p></div>"
   )
 }
@@ -327,15 +397,22 @@ report_interpretation_html <- function(entry) {
   if (is.null(entry)) return("<div class='empty'>Interpretation is not available.</div>")
   evidence <- entry$observed_results %or_else% entry$evidence %or_else% character()
   paste0(
-    "<div class='observed-layer'><h4>Observed results · deterministic</h4><ul>",
+    "<div class='observed-layer'><h4>What the analysis directly found</h4><ul>",
     paste0("<li>", html_escape_value(evidence), "</li>", collapse = ""),
     "</ul></div>",
-    "<div class='ai-layer'><h4>Integrated biological interpretation</h4><p>",
-    html_escape_value(entry$summary %or_else% "Interpretation is not available."),
-    "</p><h5>Key findings</h5>", report_list_html(entry$key_findings),
-    "<h5>Biological context</h5><p>", html_escape_value(entry$biological_context %or_else% "Additional biological context is not available."),
-    "<h5>Cancer relevance</h5><p>", html_escape_value(entry$cancer_relevance %or_else% "Cannot be determined from the current data."),
-    "</p></div>"
+    "<div class='audience-grid'><div class='audience-panel plain-reader'><span class='kicker'>GENERAL READER</span><h4>Plain-language interpretation</h4><p>",
+    html_escape_value(entry$summary %or_else% "Interpretation is not available."), "</p></div>",
+    "<div class='audience-panel technical-reader'><span class='kicker'>RESEARCHER / CLINICIAN</span><h4>Technical interpretation</h4><p>",
+    html_escape_value(entry$biological_context %or_else% "Additional biological context is not available."), "</p></div></div>",
+    report_disclosure_html(
+      "View named findings and interpretation limits",
+      paste0(
+        "<h5>Named findings</h5>", report_list_html(entry$key_findings),
+        "<h5>Cancer relevance</h5><p>", html_escape_value(entry$cancer_relevance %or_else% "Cannot be determined from the current data."), "</p>",
+        "<h5>Limitations</h5>", report_list_html(entry$limitations)
+      ),
+      "technical-disclosure"
+    )
   )
 }
 
@@ -373,19 +450,25 @@ report_provider_comparison_html <- function(bundle, selected_agents) {
   provider_summary <- function(value, label) {
     usage <- value$usage %or_else% list()
     cost <- suppressWarnings(as.numeric(value$estimated_cost_usd %or_else% NA_real_))
-    report_key_value_table(c(
-      "Provider" = label,
-      "State" = interpretation_display_label(value),
-      "Model" = report_value(value$model),
-      "Elapsed seconds" = if (is.finite(value$elapsed_seconds %or_else% NA_real_)) round(value$elapsed_seconds, 1) else "Not recorded",
+    elapsed <- if (is.finite(value$elapsed_seconds %or_else% NA_real_)) paste0(round(value$elapsed_seconds, 1), " s") else "Not recorded"
+    cost_label <- if (is.finite(cost)) paste0("~$", format(cost, digits = 3, nsmall = 3)) else "Local / not recorded"
+    technical <- report_key_value_table(c(
       "Input tokens" = report_value(usage$input_tokens),
       "Output tokens" = report_value(usage$output_tokens),
       "Total tokens" = report_value(usage$total_tokens),
-      "Estimated API cost (USD)" = if (is.finite(cost)) paste0("~$", format(cost, digits = 3, nsmall = 3)) else "Not applicable / not recorded",
       "HTTP status" = if (is.finite(value$http_status %or_else% NA_real_)) as.character(value$http_status) else "Not recorded",
       "Request ID" = report_value(value$request_id),
       "Provider diagnostic" = report_value(value$provider_error, if (value$source %in% c("ollama", "openai")) "None" else value$reason)
     ))
+    paste0(
+      "<article class='provider-card'><span class='kicker'>", html_escape_value(label), "</span><h3>",
+      html_escape_value(report_value(value$model)), "</h3><p class='provider-state'>",
+      html_escape_value(interpretation_display_label(value)), "</p><div class='metric-strip'>",
+      "<div><span>Time</span><strong>", html_escape_value(elapsed), "</strong></div>",
+      "<div><span>Estimated cost</span><strong>", html_escape_value(cost_label), "</strong></div></div>",
+      report_disclosure_html("Technical request details", technical, "technical-disclosure"),
+      "</article>"
+    )
   }
   comparisons <- paste0(vapply(selected_agents, function(key) {
     local_entry <- comparison$ollama$agents[[key]] %or_else% list()
@@ -401,17 +484,18 @@ report_provider_comparison_html <- function(bundle, selected_agents) {
       paste("OpenAI did not generate model-authored prose.", comparison$openai$reason %or_else% "")
     }
     paste0(
-      "<div class='comparison-agent'><h3>", html_escape_value(agent_titles[[key]]), "</h3><div class='comparison-grid'>",
+      "<details class='comparison-agent'><summary>", html_escape_value(agent_titles[[key]]), " · compare provider wording</summary><div class='comparison-grid disclosure-body'>",
       "<div><span class='kicker'>LOCAL OLLAMA</span><p>", html_escape_value(local_summary), "</p></div>",
       "<div class='premium-comparison'><span class='kicker'>OPENAI PREMIUM</span><p>", html_escape_value(remote_summary), "</p></div>",
-      "</div></div>"
+      "</div></details>"
     )
   }, character(1)), collapse = "")
   paste0(
     "<section id='provider-comparison'><span class='kicker'>CONTROLLED MODEL COMPARISON</span><h2>Ollama vs OpenAI Premium</h2>",
     "<p class='section-copy'>Both providers received the same structured result digest and JSON contract. Deterministic observations and named findings were rebuilt from saved result tables after generation. Prose length or fluency is not evidence of scientific correctness.</p>",
-    "<div class='comparison-grid'><div><h3>Local provider</h3>", provider_summary(comparison$ollama, "Ollama"), "</div><div class='premium-comparison'><h3>Premium provider</h3>", provider_summary(comparison$openai, "OpenAI Responses API"), "</div></div>",
+    "<div class='comparison-grid provider-grid'>", provider_summary(comparison$ollama, "LOCAL OLLAMA"), provider_summary(comparison$openai, "OPENAI RESPONSES API"), "</div>",
     "<p class='note'><strong>Primary report narrative:</strong> ", html_escape_value(toupper(comparison$primary_provider %or_else% "computed")), ". OpenAI requests transmitted only the structured result digest, used store=false, and did not upload the original input file.</p>",
+    "<h3>Provider wording by analysis</h3><p class='note'>Collapsed to keep the report short. Open an analysis only when you want to compare wording.</p>",
     comparisons,
     "</section>"
   )
@@ -441,10 +525,15 @@ build_combined_html_report <- function(
   manifest <- report_manifest(selected_agents)
   packages <- report_package_versions()
   comparison_html <- report_provider_comparison_html(interpretation_bundle, selected_agents)
+  prompt_html <- report_prompt_transparency_html(interpretation_bundle, selected_agents)
 
-  summary_rows <- if (nrow(summary_data)) paste0(apply(summary_data, 1, function(row) {
-    paste0("<tr><td><strong>", html_escape_value(row[["Agent"]]), "</strong></td><td>", html_escape_value(row[["Status"]]), "</td><td>", html_escape_value(row[["Rows"]]), "</td><td>", html_escape_value(row[["Plot"]]), "</td></tr>")
-  }), collapse = "") else "<tr><td colspan='4'>No agents selected.</td></tr>"
+  summary_items <- if (nrow(summary_data)) paste0(apply(summary_data, 1, function(row) {
+    paste0(
+      "<div class='agent-pill'><strong>", html_escape_value(row[["Agent"]]),
+      "</strong><span>", html_escape_value(row[["Rows"]]), " rows · ",
+      html_escape_value(row[["Status"]]), "</span></div>"
+    )
+  }), collapse = "") else "<p class='note'>No agents selected.</p>"
 
   input_context <- run_context$input %or_else% list()
   import <- input_context$import %or_else% list()
@@ -496,12 +585,17 @@ build_combined_html_report <- function(
     "<section id='integrated-interpretation'><span class='kicker'>IAN-STYLE INTEGRATED REVIEW</span><h2>",
     html_escape_value(synthesis$title %or_else% "Integrated scientific interpretation"), "</h2><p class='source'>",
     html_escape_value(interpretation_display_label(interpretation_bundle)),
-    "</p><div class='executive-summary'><h3>Executive interpretation</h3><p>",
+    "</p><div class='audience-grid synthesis-audiences'><div class='audience-panel plain-reader'><span class='kicker'>GENERAL READER</span><h3>Plain-language overview</h3><p>",
     html_escape_value(synthesis$summary %or_else% "Synthesis is not available."),
-    "</p><h3>Biological and cellular interpretation</h3><p>",
+    "</p></div><div class='audience-panel technical-reader'><span class='kicker'>RESEARCHER / CLINICIAN</span><h3>Technical integrated interpretation</h3><p>",
     html_escape_value(synthesis$integrated_interpretation %or_else% synthesis$summary %or_else% "Not available."),
-    "</p>", if (!is.null(synthesis$deep_narrative)) paste0("<h3>Detailed IAN narrative</h3><div class='deep-narrative-text'>", report_deep_narrative_html(synthesis$deep_narrative), "</div>") else "",
-    "</div><div class='synthesis-grid'><div><h3>Convergent signals</h3>", report_list_html(synthesis$convergences),
+    "</p></div></div>",
+    if (!is.null(synthesis$deep_narrative)) report_disclosure_html(
+      "Read the detailed scientific narrative",
+      paste0("<div class='deep-narrative-text'>", report_deep_narrative_html(synthesis$deep_narrative), "</div>"),
+      "narrative-disclosure"
+    ) else "",
+    "<div class='synthesis-grid'><div><h3>Convergent signals</h3>", report_list_html(synthesis$convergences),
     "</div><div><h3>Candidate regulatory network</h3><p>", html_escape_value(synthesis$regulatory_network %or_else% "Not available."),
     "</p><h4>ChEA evidence and prioritization rationale</h4>", report_chea_evidence_html(),
     "</div><div class='wide-card'><h3>Hub candidates and network picture</h3>", report_hub_evidence_html(),
@@ -527,9 +621,45 @@ build_combined_html_report <- function(
   manifest_table <- report_preview_table(manifest, maximum_rows = max(1L, nrow(manifest)))
   interpretation_contract <- report_value(interpretation_bundle$contract_version, interpretation_contract_version)
   plotly_library <- report_plotly_library()
+  interpretation_state_html <- report_key_value_table(c(
+    "State" = interpretation_display_label(interpretation_bundle),
+    "Provider mode" = report_value(interpretation_bundle$provider, report_value(interpretation_bundle$source)),
+    "Source" = report_value(interpretation_bundle$source),
+    "Model" = report_value(interpretation_bundle$model),
+    "JSON contract" = interpretation_contract,
+    "OpenAI request ID" = report_value(interpretation_bundle$request_id),
+    "API tokens" = report_value(interpretation_bundle$usage$total_tokens),
+    "Estimated API cost (USD)" = if (is.finite(interpretation_bundle$estimated_cost_usd %or_else% NA_real_)) sprintf("%.4f", interpretation_bundle$estimated_cost_usd) else "Not available"
+  ))
+  run_details_html <- paste0(
+    "<section id='run-details' class='compact-section'><span class='kicker'>TECHNICAL RECORD</span><h2>Run details</h2>",
+    "<p class='section-copy'>Kept for reproducibility and collapsed by default so it does not interrupt the scientific report.</p>",
+    report_disclosure_html("Input file and timestamps", provenance, "technical-disclosure"),
+    report_disclosure_html("Model, contract, tokens, and request ID", interpretation_state_html, "technical-disclosure"),
+    "<p class='note'>Observed-result bullets are computed from saved result tables. Model text cannot alter them. OpenAI receives only the structured digest, uses <code>store=false</code>, and does not receive the original upload.</p></section>"
+  )
   responsible_html <- paste0(
-    "<section id='responsible-interpretation' class='limitations'><span class='kicker'>READ BEFORE INTERPRETING RESULTS</span><h2>Responsible interpretation</h2>",
-    "<ul><li>Enrichment is over-representation and does not prove pathway activation or causality.</li><li>Network centrality does not establish functional importance.</li><li>GSVA scores are relative sample-level estimates; immune deconvolution is estimated composition.</li><li>Drug-response ranks do not establish mechanism, clinical efficacy, dose, or patient suitability.</li><li>Annotation databases and installed packages are version-dependent. Unmapped genes are excluded and reported in Methods.</li><li>Literature novelty, clinical relevance, and target actionability require dedicated external evidence review.</li><li>Results require independent statistical, biological, and clinical review.</li></ul></section>"
+    "<aside id='responsible-interpretation' class='limitations compact-callout'><span class='kicker'>INTERPRETATION BOUNDARY</span><h2>Research evidence, not a clinical conclusion</h2>",
+    "<p>Enrichment, network, regulator, immune, and drug-response results prioritize hypotheses. They do not prove pathway activation, causality, treatment benefit, or patient suitability.</p>",
+    report_disclosure_html(
+      "Read all interpretation limits",
+      "<ul><li>Network centrality does not establish functional importance.</li><li>GSVA scores are relative sample-level estimates; immune deconvolution is estimated composition.</li><li>Drug-response ranks do not establish mechanism, clinical efficacy, dose, or patient suitability.</li><li>Annotation databases and installed packages are version-dependent.</li><li>Literature novelty, clinical relevance, and target actionability require dedicated external evidence review.</li><li>Results require independent statistical, biological, and clinical review.</li></ul>",
+      "technical-disclosure"
+    ),
+    "</aside>"
+  )
+  methods_html <- paste0(
+    "<section id='methods'><span class='kicker'>REPRODUCIBILITY</span><h2>Methods and supporting details</h2>",
+    "<div class='method-callout'><strong>Interpretation method.</strong> The IAN sequence reviews each analysis, checks grounding, integrates explicit overlap, prioritizes regulators and network hubs, states one testable hypothesis, and proposes validation. Ollama and OpenAI use the same versioned contract.</div>",
+    report_disclosure_html("Gene mapping summary", mapping_html, "technical-disclosure"),
+    report_disclosure_html("Input selection and experimental context", configuration_html, "technical-disclosure"),
+    report_disclosure_html(
+      "Analysis environment and software versions",
+      paste0("<p>Human identifiers use the installed org.Hs.eg.db annotation. Database defaults are used when no tested-gene universe is supplied, which limits comparisons across databases.</p>", package_table),
+      "technical-disclosure"
+    ),
+    report_disclosure_html("ARTIFACT MANIFEST · files represented in this report", manifest_table, "technical-disclosure"),
+    "</section>"
   )
 
   html <- paste0(
@@ -544,32 +674,24 @@ build_combined_html_report <- function(
     "figure{margin:22px 0}img{display:block;max-width:100%;max-height:720px;margin:auto;padding:8px;background:white;border-radius:12px}figcaption{text-align:center;margin-top:8px}.empty{padding:18px;border:1px dashed #aab7ae;border-radius:12px;color:var(--muted)}",
     ".observed-layer,.ai-layer{margin-top:20px;padding:18px;border-radius:14px}.observed-layer{background:#edf5ef;border:1px solid #c9dbcd}.ai-layer{background:#f1edf7;border:1px solid #d8cfea}.observed-layer h4,.ai-layer h4{margin-top:0}.ai-layer h4{color:#51488d}",
     ".report-nav{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0 0}.report-nav a{padding:8px 12px;border-radius:999px;background:#fff;color:var(--ink);text-decoration:none;border:1px solid var(--line);font-weight:700}.run-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.run-facts>div{padding:13px 15px;background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:12px}.run-facts span{display:block;color:var(--muted);font-size:12px}.run-facts strong{display:block;margin-top:3px;overflow-wrap:anywhere}.executive-summary{padding:20px;background:linear-gradient(135deg,#edf5ef,#f2eef7);border-radius:15px}.deep-narrative-text{line-height:1.72}.deep-narrative-text h4{margin:22px 0 7px;color:#51488d}.deep-narrative-item{margin:8px 0;padding:10px 12px;background:#fffdf8;border-left:3px solid #8cac93;border-radius:6px}.deep-narrative-subitem{margin:5px 0 5px 18px;color:var(--muted)}.synthesis-grid,.comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.synthesis-grid>div,.comparison-grid>div{padding:17px;background:#faf9f5;border:1px solid var(--line);border-radius:13px}.synthesis-grid>.wide-card{grid-column:1/-1}.premium-comparison{background:#f3edf8!important;border-color:#d4c5e4!important}.comparison-agent{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}.comparison-agent h3{margin:0 0 10px}.interactive-chart-single{max-width:980px;margin:auto}.interactive-chart{height:540px;border:1px solid var(--line);border-radius:14px;overflow:hidden}.string-network-block{margin-top:28px}.string-network-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:18px;align-items:stretch}.string-3d-chart{height:610px}.network-guide{padding:20px;background:linear-gradient(160deg,#edf5ef,#f7f3fb);border:1px solid #cfdcd2;border-radius:14px}.network-guide h4{margin:5px 0 15px}.network-guide h5{margin:18px 0 8px}.network-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.network-stats>div{padding:11px;background:#fffdf8;border:1px solid var(--line);border-radius:10px}.network-stats strong{display:block;font-size:22px;color:#a94f3b}.network-stats span{display:block;color:var(--muted);font-size:11px;line-height:1.35}.network-legend{list-style:none;padding:0;margin:17px 0}.network-legend li{display:grid;grid-template-columns:22px 1fr;gap:9px;align-items:start;margin:10px 0}.network-legend i{display:block;margin-top:4px}.legend-node{width:14px;height:14px;border-radius:50%;background:#d98468;border:2px solid #fff;box-shadow:0 0 0 1px #a94f3b}.legend-edge{width:20px;height:3px;background:#6d8d7d;border-radius:4px}.legend-size{width:17px;height:17px;border-radius:50%;background:linear-gradient(135deg,#bdd4c5,#a94f3b)}.hub-rank-list{padding-left:22px}.hub-rank-list li{padding:5px 0;border-bottom:1px solid rgba(99,119,108,.16)}.hub-rank-list li span{display:inline-block;min-width:80px}.hub-rank-list li strong{font-size:12px;color:#627069}.network-controls{font-size:13px}.network-warning{padding:11px;background:#fff6ee;border-left:4px solid var(--accent);border-radius:8px;font-size:12px}.hub-figure img{max-height:680px}.evidence-card,.hypothesis-card{padding:15px;background:#fffdf8;border:1px solid var(--line);border-radius:11px}.method-callout{padding:18px;border-left:5px solid #6860a8;background:#f2eef7;border-radius:10px}.limitations{background:#fff6ee;border-left:5px solid var(--accent)}code{overflow-wrap:anywhere}@media(max-width:900px){.string-network-layout{grid-template-columns:1fr}.string-3d-chart{height:520px}}@media(max-width:800px){.synthesis-grid,.comparison-grid,.run-facts{grid-template-columns:1fr}.interactive-chart{height:430px}.string-3d-chart{height:470px}}@media(max-width:700px){.page{padding:20px 12px 48px}.hero,section{padding:20px}.agent-section{padding:16px}h1{font-size:30px}.agent-heading{flex-direction:column}th,td{font-size:11px;padding:8px}}",
+    "html{scroll-behavior:smooth}.page{max-width:1120px;padding:28px 22px 64px}.hero,section,.compact-callout{margin-bottom:14px;padding:20px;border-radius:14px;box-shadow:0 5px 18px rgba(52,67,58,.045)}h1{font-size:35px}h2{font-size:24px}h3{margin:16px 0 7px;font-size:19px}h4{margin:14px 0 7px;font-size:17px}p{margin:7px 0 12px}.table-wrap{border-radius:9px}.table-wrap.compact{max-width:none}table{font-size:12px}th,td{padding:7px 9px}tbody th{width:210px}.table-wrap.compact td{white-space:normal;overflow-wrap:anywhere}",
+    ".workflow-section{border-top-width:5px}.agent-section{margin:14px 0;padding:17px;border-radius:12px}.row-count{padding:5px 8px;font-size:11px}.agent-run-strip{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.agent-pill{display:flex;gap:7px;align-items:center;padding:6px 9px;background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:9px;font-size:12px}.agent-pill span{color:var(--muted)}.observed-layer{margin-top:14px;padding:13px 15px;border-left:4px solid #8cac93;border-radius:8px}.observed-layer h4{margin-top:0}",
+    ".audience-grid,.prompt-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.audience-panel{padding:15px;border:1px solid var(--line);border-radius:10px}.plain-reader{background:#edf5ef}.technical-reader{background:#f3edf8;border-color:#d4c5e4}.audience-panel h3,.audience-panel h4{margin-top:5px}.synthesis-grid,.comparison-grid{gap:12px}.synthesis-grid>div,.comparison-grid>div{padding:13px;border-radius:10px}",
+    ".report-disclosure,.comparison-agent{margin-top:9px;padding:0;border:1px solid var(--line);border-radius:9px;background:#fff}.report-disclosure>summary,.comparison-agent>summary{padding:9px 11px;cursor:pointer;font-weight:750;color:#3f5149}.report-disclosure[open]>summary,.comparison-agent[open]>summary{border-bottom:1px solid var(--line)}.disclosure-body{padding:11px}.prompt-disclosure pre{max-height:430px;margin:0;overflow:auto;padding:13px;background:#1f2925;color:#eef5f0;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.48 ui-monospace,SFMono-Regular,Menlo,monospace}.mode-note{min-height:48px}.provider-card{padding:15px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.provider-card h3{margin:4px 0}.provider-state{color:var(--muted)}.metric-strip{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.metric-strip>div{padding:8px;background:#fff;border:1px solid var(--line);border-radius:8px}.metric-strip span{display:block;color:var(--muted);font-size:11px}",
+    ".interactive-chart{height:430px;border-radius:10px}.string-3d-chart{height:500px}.string-network-layout{gap:12px}.network-guide{padding:15px;border-radius:10px}.method-callout{margin-bottom:10px;padding:13px;border-left-width:4px;border-radius:8px}.compact-callout h2{font-size:20px}.limitations{border-left-width:4px}@media(max-width:800px){.audience-grid,.prompt-mode-grid{grid-template-columns:1fr}.mode-note{min-height:0}.interactive-chart{height:390px}.string-3d-chart{height:420px}}@media(max-width:700px){.page{padding:14px 9px 40px}.hero,section,.compact-callout{padding:15px}.agent-section{padding:13px}h1{font-size:29px}}",
     "</style>", if (nzchar(plotly_library)) paste0("<script>", plotly_library, "</script>") else "", "</head><body><main class='page'>",
     "<header class='hero'><span class='badge'>", html_escape_value(report_badge), "</span><h1>", html_escape_value(report_title), "</h1><p class='muted'>Self-contained research report · generated ", html_escape_value(generated_at), "</p>",
     "<div class='run-facts'><div><span>Input file</span><strong>", html_escape_value(report_value(input_context$name)), "</strong></div><div><span>Workflow</span><strong>", html_escape_value(workflow), "</strong></div><div><span>Mapped analysis genes</span><strong>", html_escape_value(report_value(mapping$output_symbol_count, report_value(configuration$original_gene_count))), "</strong></div></div>",
-    "<h2>Run summary</h2><div class='table-wrap'><table><thead><tr><th>Agent</th><th>Status</th><th>Rows</th><th>Plot</th></tr></thead><tbody>", summary_rows, "</tbody></table></div>",
+    "<h2>Analysis at a glance</h2><div class='agent-run-strip'>", summary_items, "</div>",
     "<nav class='report-nav' aria-label='Report sections'><a href='#integrated-interpretation'>Integrated interpretation</a>",
     if (nzchar(comparison_html)) "<a href='#provider-comparison'>Model comparison</a>" else "",
+    "<a href='#prompt-transparency'>Prompts and rules</a>",
     if (length(biomarker_agents)) "<a href='#biomarker-results'>Biomarker results</a>" else "",
     if (length(drug_agents)) "<a href='#drug-results'>Drug results</a>" else "",
-    "<a href='#methods'>Methods</a><a href='#responsible-interpretation'>Responsible interpretation</a></nav></header>",
+    "<a href='#methods'>Methods</a><a href='#run-details'>Run details</a></nav></header>",
     responsible_html,
-    "<section><span class='kicker'>PROVENANCE</span><h2>Input and run identity</h2>", provenance, "</section>",
-    "<section><span class='kicker'>INTERPRETATION STATE</span><h2>Observed results and model interpretation</h2>",
-    report_key_value_table(c(
-      "State" = interpretation_display_label(interpretation_bundle),
-      "Provider mode" = report_value(interpretation_bundle$provider, report_value(interpretation_bundle$source)),
-      "Source" = report_value(interpretation_bundle$source),
-      "Model" = report_value(interpretation_bundle$model),
-      "JSON contract" = interpretation_contract,
-      "OpenAI request ID" = report_value(interpretation_bundle$request_id),
-      "API tokens" = report_value(interpretation_bundle$usage$total_tokens),
-      "Estimated API cost (USD)" = if (is.finite(interpretation_bundle$estimated_cost_usd %or_else% NA_real_)) sprintf("%.4f", interpretation_bundle$estimated_cost_usd) else "Not available"
-    )),
-    "<p class='note'>Observed-result bullets are computed deterministically from saved result tables. Model-generated text is a separate interpretive layer and cannot change those observations. In OpenAI modes, only the structured result digest is transmitted, the original upload is not sent, and the request uses <code>store=false</code>. Token cost is an estimate based on rates encoded in this app version; verify current platform pricing.</p></section>",
-    comparison_html, synthesis_html, biomarker_html, drug_html,
-    "<section id='methods'><span class='kicker'>METHODS, MAPPING, AND VERSIONS</span><h2>Reproducible methods</h2><div class='method-callout'><strong>Interpretation method.</strong> The provider-neutral prompt adapts Dr. Tyc's IAN combined-review sequence: individual-agent review, pathway integration, groundedness checking, regulator/network assessment, one consolidated hypothesis, validation planning, and high-level synthesis. Ollama and OpenAI use the same versioned JSON contract and deterministic evidence layer. Literature similarity and novelty are not asserted without a dedicated literature review.</div><h3>Gene mapping summary</h3>", mapping_html, "<h3>Input selection and experimental context</h3>", configuration_html, "<h3>Analysis environment</h3><p>Human identifier mapping uses the installed org.Hs.eg.db annotation. Enrichment statistics, multiple-testing values, and database-specific identifiers are retained in the complete CSV artifacts. Where no tested-gene universe was supplied, the relevant package or annotation collection default was used; this limits comparability across databases. Interactive horizontal bar charts are descriptive views of recorded result metrics.</p>", package_table, "</section>",
-    "<section><span class='kicker'>ARTIFACT MANIFEST</span><h2>Files represented in this report</h2>", manifest_table, "</section>",
+    synthesis_html, comparison_html, prompt_html, biomarker_html, drug_html,
+    methods_html, run_details_html,
     "</main></body></html>"
   )
   writeLines(html, destination, useBytes = TRUE)

@@ -203,6 +203,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
 .openai-key-chip { margin-left: auto; padding: 5px 8px; border-radius: 999px; font-size: 9px; font-weight: 800; }
 .openai-key-ready { color: #31664a; background: #dcebdd; border: 1px solid #b8d2bf; }
 .openai-key-missing { color: #8e3d3d; background: #f7dddd; border: 1px solid #e6bcbc; }
+.openai-premium-panel .form-group:has(#openai_api_key) { margin: 12px 0 6px; }
+.openai-premium-panel #openai_api_key { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: .02em; }
+.provider-key-note { margin-top: 0; }
+.openai-premium-panel .checkbox label { font-weight: 750; color: #68457f; }
 .provider-privacy-note { margin: 8px 0 0 !important; padding: 10px 11px; border-radius: 9px; font-size: 10px; line-height: 1.5; }
 .provider-local-note { color: #395c49 !important; background: #e7f1e8; border: 1px solid #c5d9c9; }
 .provider-external-note { color: #5d4b70 !important; background: #f7f2fb; border: 1px solid #dfd2ea; }

@@ -15,6 +15,49 @@ testthat::test_that("DEG tables are converted to bounded analysis gene sets", {
   testthat::expect_match(prepared$selection_note, "positive and negative effects are combined", fixed = TRUE)
 })
 
+testthat::test_that("Johnna CMS4 ranked headers select FDR and directional log2FC", {
+  data <- data.frame(
+    entrez_gene_id = c(7157, 1956, 5728, 672),
+    gene_symbol = c("TP53", "EGFR", "PTEN", "BRCA1"),
+    log2FC_CMS4_vs_Other = c(2.1, -2.2, 0.4, 1.5),
+    average_expression = c(6.2, 7.1, 5.4, 4.8),
+    moderated_t = c(6.1, -5.9, 1.2, 4.3),
+    p_value = c(1e-6, 2e-6, 0.2, 1e-4),
+    FDR = c(1e-4, 2e-4, 0.3, 0.01),
+    B_statistic = c(8, 7, -2, 3),
+    ranking_score = c(12.6, -12.5, 0.3, 6),
+    direction = c("Higher_in_CMS4", "Lower_in_CMS4", "Other", "Higher_in_CMS4")
+  )
+
+  prepared <- prepare_gene_input(data)
+
+  testthat::expect_identical(prepared$pvalue_column, "FDR")
+  testthat::expect_identical(prepared$effect_column, "log2FC_CMS4_vs_Other")
+  testthat::expect_setequal(prepared$genes, c("TP53", "EGFR", "BRCA1"))
+  testthat::expect_true(has_differential_expression_statistics(data))
+})
+
+testthat::test_that("limma adj.P.Val is preferred over raw P.Value", {
+  data <- data.frame(
+    entrez_gene_id = c(7157, 1956, 5728, 672),
+    gene_symbol = c("TP53", "EGFR", "PTEN", "BRCA1"),
+    logFC = c(2.1, -2.2, 1.4, 1.5),
+    AveExpr = c(6.2, 7.1, 5.4, 4.8),
+    t = c(6.1, -5.9, 3.2, 4.3),
+    P.Value = c(1e-6, 2e-6, 0.01, 1e-4),
+    adj.P.Val = c(1e-4, 2e-4, 0.2, 0.01),
+    B = c(8, 7, 1, 3),
+    check.names = FALSE
+  )
+
+  prepared <- prepare_gene_input(data)
+
+  testthat::expect_identical(prepared$pvalue_column, "adj.P.Val")
+  testthat::expect_identical(prepared$effect_column, "logFC")
+  testthat::expect_setequal(prepared$genes, c("TP53", "EGFR", "BRCA1"))
+  testthat::expect_true(has_differential_expression_statistics(data))
+})
+
 testthat::test_that("very large unranked lists fail with actionable guidance", {
   data <- data.frame(gene_symbol = paste0("GENE", seq_len(5001)))
   testthat::expect_error(

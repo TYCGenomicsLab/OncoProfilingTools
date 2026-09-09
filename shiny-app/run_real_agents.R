@@ -471,6 +471,21 @@ detect_analysis_column <- function(data, candidates, pattern = NULL) {
 }
 
 
+has_differential_expression_statistics <- function(data) {
+  if (is.null(data) || !ncol(data)) return(FALSE)
+  normalized <- normalise_column_name(names(data))
+  any(grepl(
+    paste0(
+      "^(pvalue|pval|padj|adjpval|adjpvalue|fdr|qvalue)$|",
+      "^(log2?fc|log2?foldchange|diff.*(minus|vs)|effectsize)|",
+      "^(rankingscore|moderatedt|bstatistic)$"
+    ),
+    normalized,
+    perl = TRUE
+  ))
+}
+
+
 prepare_gene_input <- function(
   data,
   pvalue_cutoff = 0.05,
@@ -508,8 +523,8 @@ prepare_gene_input <- function(
 
   adjusted_p_column <- detect_analysis_column(
     data,
-    c("padj", "adjustedpvalue", "adjustedp", "adjpvalue", "adjp", "fdr", "qvalue"),
-    pattern = "^(padj|fdr|qvalue)|adjusted.*pvalue"
+    c("padj", "adjustedpvalue", "adjustedp", "adjpvalue", "adjpval", "adjp", "fdr", "qvalue"),
+    pattern = "^(padj|adjp(val|value)?|fdr|qvalue)|adjusted.*pvalue"
   )
   if (is.null(adjusted_p_column)) {
     adjusted_p_column <- detect_analysis_column(
@@ -524,7 +539,7 @@ prepare_gene_input <- function(
       "log2foldchange", "logfoldchange", "log2fc", "logfc",
       "avglog2fc", "avglogfc", "difference", "diff", "effectsize"
     ),
-    pattern = "log2?.*fold.*change|(^|mean)diff|diff.*(minus|vs)|effectsize"
+    pattern = "^log2?fc|log2?.*fold.*change|(^|mean)diff|diff.*(minus|vs)|effectsize"
   )
 
   selected <- usable

@@ -44,7 +44,7 @@ The exchange is intentionally concise so agents can share evidence without passi
 2. The app waits until the selected run is complete.
 3. One exchange is built for every selected agent.
 4. The app immediately publishes deterministic observed results and starts a separate R worker. While it runs, the UI shows a dedicated interpretation-building state rather than a provisional computed narrative.
-5. The worker routes the same structured digest and JSON contract to local Ollama, the OpenAI Responses API, or both providers according to the selected mode while the Shiny session remains responsive.
+5. Rules-based mode stops at the deterministic interpretation. Otherwise, the worker routes the same structured digest and JSON contract to local Ollama, the OpenAI Responses API, or both providers according to the selected mode while the Shiny session remains responsive.
 6. The response must match the exact top-level contract version, is schema-checked and sanitized, and text is rendered as escaped UI content. OpenAI receives a closed strict JSON schema materialized for exactly the selected agent IDs; no dynamic `additionalProperties` map is sent to Structured Outputs.
 7. Missing, invalid, disabled, or timed-out responses retain the deterministic computed-summary bundle with a provider-specific terminal unavailable, timed-out, or error state; terminal control codes and raw HTTP diagnostics are not exposed.
 8. A parent-process watchdog terminates a worker that outlives its provider-aware deadline, even if an HTTP client or model process hangs.
@@ -55,7 +55,7 @@ The exchange is intentionally concise so agents can share evidence without passi
 
 `production_reporting.R` creates a light, self-contained HTML report with the input filename in the run summary, MD5 identity, header detection, explicit interpretation state/contract, and a responsible-interpretation notice before the scientific narrative. The Methods section integrates DEG selection provenance, experimental-comparison notes, identifier-mapping quality, gene-universe disclosure, and package versions. Report results use one precise interactive horizontal bar chart per agent; repetitive result-preview tables and generic 3D rank views are intentionally omitted because the complete full-precision CSV files ship in the results bundle. STRING uniquely retains a connected 3D interaction network because its retrieved edges are biologically meaningful. A side guide reports considered nodes, eligible edges, top hub degrees, encodings, mouse controls, and the non-causality boundary. The IAN-style synthesis adds a biological/cellular interpretation, deterministic pathway member-gene overlap, ChEA regulator rationale, a visible STRING network with hub rationale, and one consolidated result-grounded hypothesis. Biomarker Discovery and Drug Sensitivity remain distinct, and the artifact manifest is the final report table. Plotly JavaScript is embedded locally so report interaction does not require a CDN. The ZIP bundle adds `artifact_manifest.csv` and `gene_identifier_mapping.csv` when mapping was performed.
 
-Only loopback Ollama URLs matching `localhost`, `127.0.0.1`, or `[::1]` are accepted. OpenAI mode reads `OPENAI_API_KEY` from the R process environment, requires explicit UI consent, sends no original upload or patient identifier, and sets `store=false`. The key is not serialized into worker settings, browser state, caches, logs, or reports. Result contents are marked as untrusted data in the prompt, and model output is never inserted as raw HTML. Failed calls retain only a sanitized provider message, HTTP status, and request ID for troubleshooting. Provider comparison views never label the deterministic computed summary as model-authored output when that provider did not complete.
+Only loopback Ollama URLs matching `localhost`, `127.0.0.1`, or `[::1]` are accepted. OpenAI mode accepts its key only from the conditional session-only password field in the local browser and requires explicit UI consent. The parent Shiny process passes the key directly to the interpretation worker's environment without serializing it into worker settings, temporary inputs, caches, logs, or reports. The original upload and patient identifiers are not sent, and every Responses API request sets `store=false`. Result contents are marked as untrusted data in the prompt, and model output is never inserted as raw HTML. Failed calls retain only a sanitized provider message, HTTP status, and request ID for troubleshooting. Provider comparison views never label the deterministic computed summary as model-authored output when that provider did not complete.
 
 Default settings:
 
@@ -73,12 +73,13 @@ export ONCOPROFILING_OLLAMA_HOST=http://127.0.0.1:11434
 export ONCOPROFILING_OLLAMA_MODEL=llama3.1:8b
 export ONCOPROFILING_OLLAMA_TIMEOUT=300
 export ONCOPROFILING_OLLAMA_NUM_PREDICT=4096
-export OPENAI_API_KEY=your-platform-api-key
 export ONCOPROFILING_OPENAI_MODEL=gpt-5.6-terra
 export ONCOPROFILING_OPENAI_REASONING=medium
 export ONCOPROFILING_OPENAI_TIMEOUT=240
 export ONCOPROFILING_OPENAI_MAX_OUTPUT=12000
 ```
+
+The OpenAI API key intentionally has no terminal override. It appears only in the local browser after **OpenAI Premium** or **Compare both** is selected and is discarded with the session.
 
 OpenAI Platform API access and billing are separate from the local Ollama path. Do not send identifiable patient data or protected health information without the institutional approvals and provider terms required for that data. Any displayed API cost is an estimate based on rates encoded in the app version; current platform pricing remains authoritative.
 

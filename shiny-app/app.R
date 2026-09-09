@@ -63,10 +63,16 @@ dataset_profile <- function(data, pvalue_cutoff = 0.05, effect_cutoff = 1, max_g
     values <- suppressWarnings(as.numeric(as.character(x)))
     mean(!is.na(values)) >= 0.8
   }, logical(1)))
+  # A differential-expression results table can be wide and mostly numeric,
+  # but its statistics are not independent sample-expression columns. Keep
+  # GSVA and immune deconvolution disabled when strong DEG field names are
+  # present so files such as limma outputs are never treated as matrices.
+  has_de_statistics <- has_differential_expression_statistics(data)
   # DEG summaries such as gene_expression_CMS4.csv have a few numeric
   # statistics but are not sample-by-gene matrices. Require a wider matrix
   # before offering GSVA or immune deconvolution.
-  expression <- ncol(data) >= 10L && length(genes) >= 10L && numeric_count >= 2L
+  expression <- !has_de_statistics && ncol(data) >= 10L &&
+    length(genes) >= 10L && numeric_count >= 2L
 
   compound <- any(normalized %in% c("compound", "compoundname", "drug", "drugname", "treatment"))
   response <- any(normalized %in% c("ic50", "auc", "viability", "sensitivity", "response", "lnic50"))
@@ -176,15 +182,16 @@ server <- function(input, output, session) {
       openai_reasoning_effort = input$openai_reasoning %or_else% "medium",
       openai_timeout_seconds = input$openai_timeout %or_else% 240,
       openai_max_output_tokens = 12000L,
-      openai_data_consent = isTRUE(input$openai_data_consent)
+      openai_data_consent = isTRUE(input$openai_data_consent),
+      openai_key_available = nzchar(trimws(input$openai_api_key %or_else% ""))
     )
   })
 
   output$openai_key_status <- renderUI({
-    configured <- nzchar(trimws(Sys.getenv("OPENAI_API_KEY", "")))
+    session_configured <- nzchar(trimws(input$openai_api_key %or_else% ""))
     span(
-      class = paste("openai-key-chip", if (configured) "openai-key-ready" else "openai-key-missing"),
-      if (configured) "API key detected" else "API key not configured"
+      class = paste("openai-key-chip", if (session_configured) "openai-key-ready" else "openai-key-missing"),
+      if (session_configured) "Session key ready" else "API key required"
     )
   })
 
@@ -445,6 +452,19 @@ server <- function(input, output, session) {
     }
     if (running()) return()
 
+    provider <- input$interpretation_provider %or_else% "ollama"
+    if (provider %in% c("openai", "compare")) {
+      key_available <- nzchar(trimws(input$openai_api_key %or_else% ""))
+      if (!key_available) {
+        showNotification("Paste your OpenAI API key in the session-only website field before running.", type = "error", duration = 8)
+        return()
+      }
+      if (!isTRUE(input$openai_data_consent)) {
+        showNotification("OpenAI consent is required. Check the approval box directly below the OpenAI settings, then run again.", type = "error", duration = 10)
+        return()
+      }
+    }
+
     requested <- vapply(route_agents(), function(key) isTRUE(input[[paste0("module_", key)]]), logical(1))
     selected <- names(requested)[requested & compatibility()[names(requested)]]
     if (!length(selected)) {
@@ -605,6 +625,7 @@ server <- function(input, output, session) {
     active_agents = selected_value,
     analysis_complete = analysis_complete,
     ollama_settings = ollama_settings,
+    openai_api_key = reactive(trimws(input$openai_api_key %or_else% "")),
     run_context = run_context
   )
 

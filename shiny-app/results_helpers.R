@@ -1087,7 +1087,7 @@ build_cross_agent_synthesis_ui <- function(bundle) {
   )
 }
 
-start_local_interpretation_job <- function(data_by_agent, settings) {
+start_local_interpretation_job <- function(data_by_agent, settings, openai_api_key = "") {
   if (!requireNamespace("processx", quietly = TRUE)) {
     stop("Background interpretation requires the processx package.", call. = FALSE)
   }
@@ -1105,14 +1105,23 @@ start_local_interpretation_job <- function(data_by_agent, settings) {
   stdout_path <- tempfile("oncoprofiling-interpretation-stdout-", fileext = ".log")
   stderr_path <- tempfile("oncoprofiling-interpretation-stderr-", fileext = ".log")
 
+  # The browser-supplied key is never serialized. The child receives it only
+  # through its process environment and all temporary files contain settings
+  # and scientific digests only.
   saveRDS(list(data_by_agent = data_by_agent, settings = settings), input_path)
+  worker_environment <- if (nzchar(trimws(openai_api_key))) {
+    c("current", OPENAI_API_KEY = trimws(openai_api_key))
+  } else {
+    NULL
+  }
   process <- processx::process$new(
     command = file.path(R.home("bin"), "Rscript"),
     args = c("--vanilla", worker_path, input_path, output_path, helper_path),
     stdout = stdout_path,
     stderr = stderr_path,
+    env = worker_environment,
     cleanup = TRUE,
-    cleanup_tree = TRUE
+    cleanup_tree = FALSE
   )
 
   settings <- normalise_interpretation_settings(settings)
@@ -1154,7 +1163,7 @@ cleanup_local_interpretation_job <- function(job, terminate = FALSE) {
   if (isTRUE(terminate) && !is.null(job$process)) {
     try({
       if (isTRUE(job$process$is_alive())) {
-        job$process$kill_tree()
+        job$process$kill()
         job$process$wait(timeout = 1000)
       }
     }, silent = TRUE)
@@ -1173,6 +1182,7 @@ register_results_server <- function(
   active_agents = NULL,
   analysis_complete = NULL,
   ollama_settings = NULL,
+  openai_api_key = NULL,
   run_context = NULL,
   interpretation_job_factory = start_local_interpretation_job,
   interpretation_cache_path = completed_interpretation_cache_path
@@ -1219,6 +1229,9 @@ register_results_server <- function(
   interpretation_cache$value <- NULL
   interpretation_job <- new.env(parent = emptyenv())
   interpretation_job$value <- NULL
+  session_key_state <- new.env(parent = emptyenv())
+  session_key_state$value <- NULL
+  session_key_state$revision <- 0L
   interpretation_version <- shiny::reactiveVal(0L)
 
   publish_interpretation <- function(bundle, cache_key) {
@@ -1247,6 +1260,12 @@ register_results_server <- function(
     } else {
       ollama_settings()
     }
+    session_api_key <- if (is.null(openai_api_key)) "" else trimws(openai_api_key())
+    if (!identical(session_key_state$value, session_api_key)) {
+      session_key_state$value <- session_api_key
+      session_key_state$revision <- session_key_state$revision + 1L
+    }
+    settings$openai_key_available <- nzchar(session_api_key)
     settings <- normalise_interpretation_settings(settings)
 
     run_is_complete <- if (is.null(analysis_complete)) TRUE else isTRUE(analysis_complete())
@@ -1269,6 +1288,7 @@ register_results_server <- function(
       settings$openai_max_output_tokens,
       settings$openai_data_consent,
       settings$openai_key_available,
+      session_key_state$revision,
       interpretation_contract_version,
       run_is_complete,
       collapse = "|"
@@ -1337,7 +1357,7 @@ register_results_server <- function(
 
     interpretation_job$value <- tryCatch(
       {
-        job <- interpretation_job_factory(data_by_agent, settings)
+        job <- interpretation_job_factory(data_by_agent, settings, session_api_key)
         job$key <- cache_key
         job
       },
@@ -1429,6 +1449,7 @@ register_results_server <- function(
 
   session$onSessionEnded(function() {
     cleanup_local_interpretation_job(interpretation_job$value, terminate = TRUE)
+    session_key_state$value <- NULL
   })
 
   interpretation_bundle <- shiny::reactive({
