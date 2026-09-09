@@ -31,3 +31,6 @@ example_workbook.xlsx
 *.xlsx
 *.docx
 *.zip
+
+# Generated pkgdown site
+docs/

@@ -7,12 +7,11 @@
 AssayTypes
 }
 \description{
-Helpful for intelligent code completion and avoiding typos in assay type
-strings.
+Helpful for intelligent code completion and avoiding typos in assay types.
 }
 \examples{
-AssayTypes$Expression
-AssayTypes$ProteinExpression
-AssayTypes$PRISM
+AssayTypes # you can see all supported assays available
+AssayTypes$RNA # it's just a string at the end of the day
+
 
 }

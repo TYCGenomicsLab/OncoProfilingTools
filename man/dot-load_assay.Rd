@@ -4,13 +4,18 @@
 \alias{.load_assay}
 \title{Load a single assay using a registered loader}
 \usage{
-.load_assay(path, filename, assay_type, OncoAssay_class, loader, ...)
+.load_assay(
+  assay_type,
+  OncoAssay_class,
+  loader,
+  data_path,
+  metadata_path = NULL,
+  identifier = NULL,
+  name = NULL,
+  ...
+)
 }
 \arguments{
-\item{path}{Character scalar. Path to the assay file.}
-
-\item{filename}{Character scalar. File name being loaded.}
-
 \item{assay_type}{Character scalar. Project-level assay type.}
 
 \item{OncoAssay_class}{Character scalar. Expected returned assay class.}
@@ -18,6 +23,10 @@
 \item{loader}{Character scalar. Registered loader function name.}
 
 \item{...}{Additional arguments passed to the registered loader.}
+
+\item{path}{Character scalar. Path to the assay file.}
+
+\item{filename}{Character scalar. File name being loaded.}
 }
 \value{
 An assay object of the expected class.

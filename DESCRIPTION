@@ -2,14 +2,14 @@ Package: OncoProfilingTools
 Type: Package
 Title: Tools for Oncology Profiling Data Analysis
 Version: 0.1.0
-Authors@R: person("Jason", "LaPierre",
-    email = "lapierreja@vcu.edu",
-    role = c("aut", "cre"))
-Author: Jason LaPierre [aut, cre]
-Maintainer: Jason LaPierre <lapierreja@vcu.edu>
+Authors@R: c(
+    person(given = "Jason", family = "LaPierre", role = c("aut", "cre"), email = "lapierreja@vcu.edu", comment = c(ORCID = "0009-0006-1827-8213")),
+    person(given = "Johnna", family = "Berryhill", role = c("aut"), email = "berryhilljk@vcu.edu"),
+    person(given = "Katarzyna M.", family = "Tyc", role = "aut", comment = c(ORCID = "0000-0002-3850-6934"))
+    )
 Description: Provides S4 classes and methods for managing and analyzing
-    cancer genomic profiling data, with integration to the DepMap project
-    for downloading and organizing oncology assays.
+    cancer genomic profiling data, including assay loading, enrichment,
+    pharmacogenomic, and interactive oncology analysis workflows.
 License: file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
@@ -74,25 +74,21 @@ Collate:
     'class-ExpressionAssay.R'
     'class-MutationAssay.R'
     'class-OncoExperiment.R'
-    'class-ProteinExpressionAssay.R'
+    'class-RNAAssay.R'
     'enum-ModelMetadataFields.R'
     'generic-add-assay.R'
     'generic-compare-drug-sensitivites.R'
-    'generic-download-assays.R'
     'generic-load-assays.R'
     'generic-subset.R'
-    'internal-download-assays.R'
     'internal-load-assays.R'
     'internal-metadata.R'
     'method-add-assay.R'
     'method-compare-drug-sensitivities.R'
-    'method-download-assays.R'
+    'method-load-RNA-assay.R'
     'registry-assays.R'
     'method-load-assays.R'
     'method-load-drug-response-assay.R'
-    'method-load-expression-assay.R'
-    'method-load-mutation-assay.R'
-    'method-load-protein-expression-assay.R'
     'method-subset.R'
     'plot-theme.R'
     'plot-donut.R'
+URL: https://tycgenomicslab.github.io/OncoProfilingTools/

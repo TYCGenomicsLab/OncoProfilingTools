@@ -5,24 +5,25 @@
 \title{Load a PRISM drug response assay}
 \usage{
 load_drug_response_assay(
-  path,
-  assay_name = "PRISM Primary Repurposing",
-  compound_metadata_path = NULL,
-  cell_line_metadata_path = NULL,
-  unit = "logfoldchange"
+  data_path,
+  metadata_path = NULL,
+  assay_name = "DrugResponse",
+  unit = "logfoldchange",
+  identifier = NULL,
+  ...
 )
 }
 \arguments{
+\item{assay_name}{A character string specifying the assay name.}
+
+\item{unit}{A character string specifying the unit of measurement.}
+
 \item{path}{A character string specifying the file path to the drug response
 assay data.}
-
-\item{assay_name}{A character string specifying the assay name.}
 
 \item{compound_metadata_path}{Optional path to PRISM compound metadata.}
 
 \item{cell_line_metadata_path}{Optional path to PRISM cell line metadata.}
-
-\item{unit}{A character string specifying the unit of measurement.}
 }
 \value{
 A `DrugResponseAssay`, which inherits from `SummarizedExperiment`.

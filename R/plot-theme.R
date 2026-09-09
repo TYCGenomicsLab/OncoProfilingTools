@@ -9,7 +9,7 @@
 #' @param base_family Base font family.
 #'
 #' @return A ggplot2 theme.
-#'
+#' @noRd
 #' @export
 theme_onco <- function(
   base_size = 12,
