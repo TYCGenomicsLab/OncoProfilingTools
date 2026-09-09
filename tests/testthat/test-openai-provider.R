@@ -88,9 +88,12 @@ testthat::test_that("OpenAI settings require a browser session key and explicit 
 
 testthat::test_that("OpenAI settings accept a session key availability flag without storing the key", {
   old <- Sys.getenv("OPENAI_API_KEY", unset = NA_character_)
-  on.exit({
-    if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
-  }, add = TRUE)
+  on.exit(
+    {
+      if (is.na(old)) Sys.unsetenv("OPENAI_API_KEY") else Sys.setenv(OPENAI_API_KEY = old)
+    },
+    add = TRUE
+  )
   Sys.unsetenv("OPENAI_API_KEY")
 
   settings <- normalise_interpretation_settings(list(
