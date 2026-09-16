@@ -333,8 +333,10 @@ testthat::test_that("23c an Ollama synthesis rejected by evidence checks is not 
     normalise_ollama_settings(list(model = "test-model")), bundle
   )
   testthat::expect_false(parsed$synthesis_generated)
-  grounded_summary <- paste(bundle$agents$go$summary,
-    "DNA repair is an enriched annotation here, not proof of pathway activity or a clinical effect.")
+  grounded_summary <- paste(
+    bundle$agents$go$summary,
+    "DNA repair is an enriched annotation here, not proof of pathway activity or a clinical effect."
+  )
   accepted_response <- jsonlite::toJSON(list(
     contract_version = interpretation_contract_version,
     agents = list(go = list(summary = grounded_summary)),
