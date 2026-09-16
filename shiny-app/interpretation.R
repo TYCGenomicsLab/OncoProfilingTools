@@ -2253,6 +2253,7 @@ parse_ollama_interpretation <- function(
   )
 
   entries <- fallback$agents
+  accepted_agent_interpretations <- list()
 
   for (agent_id in ids) {
 
@@ -2299,6 +2300,13 @@ parse_ollama_interpretation <- function(
     )
     if (!text_is_exchange_grounded(safe_biological_context, exchange)) {
       safe_biological_context <- fallback$agents[[agent_id]]$biological_context
+    }
+
+    if (!identical(safe_summary, fallback$agents[[agent_id]]$summary) &&
+        !agent_id %in% c("gsva", "immune")) {
+      accepted_agent_interpretations[[agent_id]] <- safe_summary
+    } else if (!identical(safe_biological_context, fallback$agents[[agent_id]]$biological_context)) {
+      accepted_agent_interpretations[[agent_id]] <- safe_biological_context
     }
 
     safe_limitations <- sanitize_limitations(
@@ -2392,6 +2400,7 @@ parse_ollama_interpretation <- function(
     synthesis = synthesis,
     synthesis_generated = integrated_accepted || takeaway_accepted,
     synthesis_integrated_generated = integrated_accepted,
+    accepted_agent_interpretations = accepted_agent_interpretations,
     exchanges = exchanges
   )
 }

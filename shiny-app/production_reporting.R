@@ -621,22 +621,35 @@ report_interpretation_tab_views <- function(bundle) {
     generated <- if (is.null(value$synthesis_generated)) {
       !is.null(model_narrative) && (is.null(computed_narrative) || !identical(model_narrative, computed_narrative))
     } else isTRUE(value$synthesis_generated)
-    available <- !is.null(value) && identical(tolower(report_value(value$source, "")), provider) && generated
+    agent_interpretations <- value$accepted_agent_interpretations %or_else% list()
+    agent_level_only <- identical(provider, "ollama") && !generated && length(agent_interpretations) > 0L
+    available <- !is.null(value) && identical(tolower(report_value(value$source, "")), provider) &&
+      (generated || agent_level_only)
     if (available) {
-      narrative <- model_narrative %or_else% "No interpretation text was returned."
-      provenance <- paste0("Generated with: ", label, " / ", report_value(value$model, "model not recorded"))
+      provenance <- paste0("Generated with: ", label, " / ", report_value(value$model, "model not recorded"),
+        if (agent_level_only) " · validated agent-level excerpts" else "")
+      if (agent_level_only) {
+        selected <- utils::head(agent_interpretations, 3L)
+        narrative_html <- paste0(
+          "<p>Ollama completed, but its cross-agent synthesis did not pass evidence checks. These validated agent-level interpretations are shown instead:</p>",
+          paste0(vapply(names(selected), function(agent_id) paste0(
+            "<p><strong>", html_escape_value(toupper(agent_id)), ":</strong> ",
+            html_escape_value(selected[[agent_id]]), "</p>"
+          ), character(1)), collapse = "")
+        )
+      } else narrative_html <- paste0("<p>", html_escape_value(model_narrative %or_else% "No interpretation text was returned."), "</p>")
     } else {
       state <- if (is.null(value)) "This provider was not run." else if (identical(tolower(report_value(value$source, "")), provider)) {
         "No distinct model-generated synthesis passed evidence checks; the computed Technical Interpretation remains available."
       } else interpretation_display_label(value)
-      narrative <- paste(label, "interpretation unavailable for this run.", state)
+      narrative_html <- paste0("<p>", html_escape_value(paste(label, "interpretation unavailable for this run.", state)), "</p>")
       provenance <- paste0(label, " status: unavailable", if (!is.null(value$model)) paste0(" / ", value$model) else "")
     }
     list(
       label = label,
       available = available,
       provenance = provenance,
-      html = paste0("<p>", html_escape_value(narrative), "</p>")
+      html = narrative_html
     )
   }
 

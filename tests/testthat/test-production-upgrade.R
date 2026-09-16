@@ -333,6 +333,27 @@ testthat::test_that("23c an Ollama synthesis rejected by evidence checks is not 
     normalise_ollama_settings(list(model = "test-model")), bundle
   )
   testthat::expect_false(parsed$synthesis_generated)
+  grounded_summary <- paste(bundle$agents$go$summary,
+    "DNA repair is an enriched annotation here, not proof of pathway activity or a clinical effect.")
+  accepted_response <- jsonlite::toJSON(list(
+    contract_version = interpretation_contract_version,
+    agents = list(go = list(summary = grounded_summary)),
+    synthesis = list(
+      integrated_interpretation = bundle$synthesis$integrated_interpretation,
+      summary = bundle$synthesis$summary
+    )
+  ), auto_unbox = TRUE)
+  accepted <- parse_ollama_interpretation(
+    accepted_response, bundle$exchanges,
+    normalise_ollama_settings(list(model = "test-model")), bundle
+  )
+  testthat::expect_false(accepted$synthesis_generated)
+  testthat::expect_identical(accepted$accepted_agent_interpretations$go, grounded_summary)
+  bundle$comparison <- list(ollama = accepted, primary_provider = "ollama")
+  bundle$source <- "comparison"
+  views <- report_interpretation_tab_views(bundle)$views
+  testthat::expect_true(views$ollama$available)
+  testthat::expect_match(views$ollama$html, "validated agent-level interpretations", fixed = TRUE)
   local <- bundle
   local$source <- "ollama"
   local$model <- "test-model"
