@@ -31,7 +31,7 @@ testthat::test_that("4 unmapped identifiers are counted honestly", {
   testthat::expect_identical(mapping$metadata$unmapped_examples, "ENSG99999999999")
 })
 
-testthat::test_that("5 IAN-style FDR and logFC filters are applied", {
+testthat::test_that("5 FDR and logFC filters are applied", {
   data <- data.frame(
     Geneid = c("TP53", "EGFR", "BRCA1"),
     FDR = c(0.01, 0.2, 0.03),
@@ -177,7 +177,7 @@ testthat::test_that("19 production report records provenance mapping and manifes
   testthat::expect_match(html, "deg.txt", fixed = TRUE)
   testthat::expect_match(html, "76.1%", fixed = TRUE)
   testthat::expect_match(html, "ARTIFACT MANIFEST", fixed = TRUE)
-  testthat::expect_lt(regexpr("Responsible interpretation", html, fixed = TRUE)[[1L]], regexpr("IAN-STYLE INTEGRATED REVIEW", html, fixed = TRUE)[[1L]])
+  testthat::expect_lt(regexpr("INTERPRETATION BOUNDARY", html, fixed = TRUE)[[1L]], regexpr("RESEARCHER SYNTHESIS", html, fixed = TRUE)[[1L]])
   testthat::expect_gt(regexpr("Gene mapping summary", html, fixed = TRUE)[[1L]], regexpr("id='methods'", html, fixed = TRUE)[[1L]])
 })
 
@@ -270,7 +270,7 @@ testthat::test_that("22 user-facing source copy never says safe fallback", {
   testthat::expect_match(results_text, "No provisional computed narrative is shown", fixed = TRUE)
 })
 
-testthat::test_that("23 detailed report embeds IAN review and interactive evidence graphs", {
+testthat::test_that("23 detailed report embeds researcher synthesis and interactive evidence graphs", {
   report <- tempfile(fileext = ".html")
   on.exit(unlink(report), add = TRUE)
   original <- result_files$go$csv
@@ -281,22 +281,58 @@ testthat::test_that("23 detailed report embeds IAN review and interactive eviden
   bundle <- generate_interpretation_bundle(list(go = safe_result_csv(fixture)), list(enabled = FALSE))
   build_combined_html_report(report, bundle, "go")
   html <- paste(readLines(report, warn = FALSE), collapse = "\n")
-  testthat::expect_match(html, "IAN-STYLE INTEGRATED REVIEW", fixed = TRUE)
+  testthat::expect_match(html, "RESEARCHER SYNTHESIS", fixed = TRUE)
+  testthat::expect_false(grepl("IAN-STYLE|GENERAL READER|RESEARCHER / CLINICIAN", html))
   testthat::expect_match(html, "Plotly.newPlot", fixed = TRUE)
   testthat::expect_false(grepl("Recommended validation priorities", html, fixed = TRUE))
-  testthat::expect_match(html, "Plain-language overview", fixed = TRUE)
-  testthat::expect_match(html, "Technical integrated interpretation", fixed = TRUE)
+  testthat::expect_match(html, "Biomarker Evidence Interpretation", fixed = TRUE)
+  testthat::expect_false(grepl("Plain-language overview|Technical integrated interpretation", html))
+  testthat::expect_match(html, ">OpenAI</button>", fixed = TRUE)
+  testthat::expect_match(html, ">Ollama</button>", fixed = TRUE)
+  testthat::expect_match(html, ">Technical Interpretation</button>", fixed = TRUE)
+  testthat::expect_identical(lengths(regmatches(html, gregexpr("id='shared-interpretation-box'", html, fixed = TRUE))), 1L)
+  testthat::expect_match(html, "showInterpretation", fixed = TRUE)
+  testthat::expect_match(html, "saveCurrentInterpretation", fixed = TRUE)
+  testthat::expect_match(html, "OpenAI interpretation unavailable for this run", fixed = TRUE)
+  testthat::expect_match(html, "Ollama interpretation unavailable for this run", fixed = TRUE)
   testthat::expect_match(html, "Prompts and rules used", fixed = TRUE)
   testthat::expect_match(html, "No language-model prompt runs in rules-based mode", fixed = TRUE)
   testthat::expect_match(html, "STRUCTURED RESULT DIGEST INSERTED HERE AT RUN TIME", fixed = TRUE)
   testthat::expect_match(html, "ARTIFACT MANIFEST · files represented in this report", fixed = TRUE)
   testthat::expect_false(grepl("<h2>Run summary</h2><div class='table-wrap'", html, fixed = TRUE))
-  testthat::expect_match(html, "One consolidated result-grounded hypothesis", fixed = TRUE)
+  testthat::expect_match(html, "9. Researcher Takeaway", fixed = TRUE)
+  testthat::expect_match(html, "Enable researcher text editing", fixed = TRUE)
+  testthat::expect_match(html, "Download edited HTML", fixed = TRUE)
+  testthat::expect_match(html, "3 enriched terms; <strong>3</strong> satisfy p.adjust ≤ 0.05", fixed = TRUE)
+  testthat::expect_match(html, "Generated with: Rules-based / deterministic", fixed = TRUE)
+  testthat::expect_match(html, "literature support and novelty were not assessed", fixed = TRUE)
   testthat::expect_false(grepl("plotly-3d-", html, fixed = TRUE))
   testthat::expect_false(grepl("Full-precision result preview", html, fixed = TRUE))
   testthat::expect_false(grepl("<h3>Result-grounded research hypotheses", html, fixed = TRUE))
   testthat::expect_false(grepl("<h3>Recommended next analyses", html, fixed = TRUE))
   testthat::expect_false(grepl("<h3>Interpretation limits", html, fixed = TRUE))
+})
+
+testthat::test_that("23a pathway member table preserves source genes counts and significance", {
+  go_file <- tempfile(fileext = ".csv")
+  kegg_file <- tempfile(fileext = ".csv")
+  on.exit(unlink(c(go_file, kegg_file)), add = TRUE)
+  readr::write_csv(data.frame(Description = "DNA repair", geneID = "TP53/BRCA1", Count = 2, p.adjust = 1e-4), go_file)
+  readr::write_csv(data.frame(Description = "Cell cycle", geneID = "CDK1/CCNB1", Count = 2, p.adjust = 2e-3), kegg_file)
+  original_go <- result_files$go$csv
+  original_kegg <- result_files$kegg$csv
+  result_files$go$csv <<- go_file
+  result_files$kegg$csv <<- kegg_file
+  on.exit({
+    result_files$go$csv <<- original_go
+    result_files$kegg$csv <<- original_kegg
+  }, add = TRUE)
+
+  html <- report_pathway_member_table_html(c("go", "kegg"))
+  testthat::expect_match(html, "DNA repair", fixed = TRUE)
+  testthat::expect_match(html, "TP53, BRCA1", fixed = TRUE)
+  testthat::expect_match(html, "Cell cycle", fixed = TRUE)
+  testthat::expect_match(html, "p.adjust", fixed = TRUE)
 })
 
 testthat::test_that("23b report keeps a documented 3D network for STRING only", {
@@ -331,12 +367,11 @@ testthat::test_that("23b report keeps a documented 3D network for STRING only", 
   build_combined_html_report(report, bundle, "string")
   html <- paste(readLines(report, warn = FALSE), collapse = "\n")
   testthat::expect_match(html, "plotly-3d-string", fixed = TRUE)
-  testthat::expect_match(html, "Connected 3D STRING interaction network", fixed = TRUE)
-  testthat::expect_match(html, "NETWORK GUIDE", fixed = TRUE)
-  testthat::expect_match(html, "eligible retrieved edges", fixed = TRUE)
-  testthat::expect_match(html, "Highest-degree hubs", fixed = TRUE)
-  testthat::expect_match(html, "Drag</strong> to rotate", fixed = TRUE)
-  testthat::expect_match(html, "connectivity prioritizes candidates", fixed = TRUE)
+  testthat::expect_match(html, "Connected STRING interaction network", fixed = TRUE)
+  testthat::expect_match(html, "plotly-string-degree", fixed = TRUE)
+  testthat::expect_match(html, "Connectivity ranking", fixed = TRUE)
+  testthat::expect_match(html, "Bars show the recorded STRING interaction degree", fixed = TRUE)
+  testthat::expect_false(grepl("NETWORK GUIDE|eligible retrieved edges|Highest-degree hubs", html))
 })
 
 testthat::test_that("24 results navigation exposes a prominent return to the main menu", {

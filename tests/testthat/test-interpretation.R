@@ -137,17 +137,17 @@ testthat::test_that("immune interpretation reports residual separately from name
   )
 })
 
-testthat::test_that("rich Ollama prompt requests distinct interpretation sections", {
+testthat::test_that("rich Ollama prompt requests one researcher interpretation", {
   exchange <- build_agent_exchange("go", data.frame(Description = "DNA repair"))
   prompt <- build_ollama_prompt(list(exchange))
 
   testthat::expect_match(prompt, "120-200 word biological_context", fixed = TRUE)
-  testthat::expect_match(prompt, "IAN-STYLE INTEGRATED REVIEW", fixed = TRUE)
+  testthat::expect_match(prompt, "RESEARCHER EVIDENCE SYNTHESIS", fixed = TRUE)
   testthat::expect_match(prompt, "validation_priorities", fixed = TRUE)
   testthat::expect_match(prompt, "general biological knowledge", fixed = TRUE)
   testthat::expect_match(prompt, "Begin every biological_context exactly with", fixed = TRUE)
-  testthat::expect_match(prompt, "plain-language interpretation", fixed = TRUE)
-  testthat::expect_match(prompt, "technical interpretation for researchers and clinicians", fixed = TRUE)
+  testthat::expect_match(prompt, "single researcher-facing interpretation", fixed = TRUE)
+  testthat::expect_false(grepl("plain-language interpretation|technical interpretation for researchers and clinicians", prompt))
   testthat::expect_false(grepl("Keep each summary under 100 words", prompt, fixed = TRUE))
 })
 

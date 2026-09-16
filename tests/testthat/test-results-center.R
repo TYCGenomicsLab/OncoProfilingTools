@@ -85,7 +85,7 @@ testthat::test_that("combined report covers all selected agents", {
   testthat::expect_match(report, "Hallmark Analysis", fixed = TRUE)
   testthat::expect_match(report, "Immune Deconvolution Analysis", fixed = TRUE)
   testthat::expect_match(report, "Drug Sensitivity Analysis", fixed = TRUE)
-  testthat::expect_match(report, "IAN-STYLE INTEGRATED REVIEW", fixed = TRUE)
+  testthat::expect_match(report, "RESEARCHER SYNTHESIS", fixed = TRUE)
 })
 
 testthat::test_that("Ollama loading, generating, completion, and error copy is explicit", {
