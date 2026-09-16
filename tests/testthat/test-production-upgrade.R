@@ -323,10 +323,13 @@ testthat::test_that("23a pathway member table preserves source genes counts and 
   original_kegg <- result_files$kegg$csv
   result_files$go$csv <<- go_file
   result_files$kegg$csv <<- kegg_file
-  on.exit({
-    result_files$go$csv <<- original_go
-    result_files$kegg$csv <<- original_kegg
-  }, add = TRUE)
+  on.exit(
+    {
+      result_files$go$csv <<- original_go
+      result_files$kegg$csv <<- original_kegg
+    },
+    add = TRUE
+  )
 
   html <- report_pathway_member_table_html(c("go", "kegg"))
   testthat::expect_match(html, "DNA repair", fixed = TRUE)
