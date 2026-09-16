@@ -613,12 +613,22 @@ report_interpretation_tab_views <- function(bundle) {
   }
   provider_view <- function(provider, label) {
     value <- provider_bundle(provider)
-    available <- !is.null(value) && identical(tolower(report_value(value$source, "")), provider)
+    model_narrative <- if (is.null(value)) NULL else if (identical(value$synthesis_integrated_generated, FALSE)) {
+      value$synthesis$summary
+    } else value$synthesis$integrated_interpretation %or_else% value$synthesis$summary
+    computed_narrative <- if (is.null(value) || !length(value$exchanges %or_else% list())) NULL else
+      rule_cross_agent_synthesis(value$exchanges)$integrated_interpretation
+    generated <- if (is.null(value$synthesis_generated)) {
+      !is.null(model_narrative) && (is.null(computed_narrative) || !identical(model_narrative, computed_narrative))
+    } else isTRUE(value$synthesis_generated)
+    available <- !is.null(value) && identical(tolower(report_value(value$source, "")), provider) && generated
     if (available) {
-      narrative <- value$synthesis$integrated_interpretation %or_else% value$synthesis$summary %or_else% "No interpretation text was returned."
+      narrative <- model_narrative %or_else% "No interpretation text was returned."
       provenance <- paste0("Generated with: ", label, " / ", report_value(value$model, "model not recorded"))
     } else {
-      state <- if (is.null(value)) "This provider was not run." else interpretation_display_label(value)
+      state <- if (is.null(value)) "This provider was not run." else if (identical(tolower(report_value(value$source, "")), provider)) {
+        "No distinct model-generated synthesis passed evidence checks; the computed Technical Interpretation remains available."
+      } else interpretation_display_label(value)
       narrative <- paste(label, "interpretation unavailable for this run.", state)
       provenance <- paste0(label, " status: unavailable", if (!is.null(value$model)) paste0(" / ", value$model) else "")
     }

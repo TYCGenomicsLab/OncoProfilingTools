@@ -153,8 +153,8 @@ workflow_page_ui <- function(mode) {
                     ),
                     selected = "gpt-5.6-terra"
                   ),
-                  selectInput("openai_reasoning", "Reasoning effort", choices = c("Low" = "low", "Medium" = "medium", "High" = "high"), selected = "medium"),
-                  numericInput("openai_timeout", "Premium timeout (seconds)", value = 240, min = 30, max = 600, step = 30)
+                  selectInput("openai_reasoning", "Reasoning effort", choices = c("Low" = "low", "Medium" = "medium", "High" = "high"), selected = "low"),
+                  numericInput("openai_timeout", "Premium timeout (seconds)", value = 600, min = 30, max = 600, step = 30)
                 ),
                 checkboxInput(
                   "openai_data_consent",

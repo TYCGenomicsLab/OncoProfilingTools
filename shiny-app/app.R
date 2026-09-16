@@ -179,8 +179,8 @@ server <- function(input, output, session) {
       timeout_seconds = input$ollama_timeout %or_else% 300,
       num_predict = 4096,
       openai_model = input$openai_model %or_else% "gpt-5.6-terra",
-      openai_reasoning_effort = input$openai_reasoning %or_else% "medium",
-      openai_timeout_seconds = input$openai_timeout %or_else% 240,
+      openai_reasoning_effort = input$openai_reasoning %or_else% "low",
+      openai_timeout_seconds = input$openai_timeout %or_else% 600,
       openai_max_output_tokens = 12000L,
       openai_data_consent = isTRUE(input$openai_data_consent),
       openai_key_available = nzchar(trimws(input$openai_api_key %or_else% ""))
@@ -191,7 +191,7 @@ server <- function(input, output, session) {
     session_configured <- nzchar(trimws(input$openai_api_key %or_else% ""))
     span(
       class = paste("openai-key-chip", if (session_configured) "openai-key-ready" else "openai-key-missing"),
-      if (session_configured) "Session key ready" else "API key required"
+      if (session_configured) "Key entered (not yet verified)" else "API key required"
     )
   })
 

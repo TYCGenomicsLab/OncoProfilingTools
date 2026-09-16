@@ -155,8 +155,8 @@ normalise_ollama_settings <- function(settings = NULL) {
 default_openai_settings <- function() {
   list(
     model = Sys.getenv("ONCOPROFILING_OPENAI_MODEL", "gpt-5.6-terra"),
-    reasoning_effort = Sys.getenv("ONCOPROFILING_OPENAI_REASONING", "medium"),
-    timeout_seconds = suppressWarnings(as.numeric(Sys.getenv("ONCOPROFILING_OPENAI_TIMEOUT", "240"))),
+    reasoning_effort = Sys.getenv("ONCOPROFILING_OPENAI_REASONING", "low"),
+    timeout_seconds = suppressWarnings(as.numeric(Sys.getenv("ONCOPROFILING_OPENAI_TIMEOUT", "600"))),
     max_output_tokens = suppressWarnings(as.integer(Sys.getenv("ONCOPROFILING_OPENAI_MAX_OUTPUT", "12000")))
   )
 }
@@ -2348,20 +2348,22 @@ parse_ollama_interpretation <- function(
     candidate_synthesis$integrated_interpretation,
     fallback$synthesis$integrated_interpretation
   )
-  if (
+  integrated_accepted <-
+    !identical(candidate_integrated, fallback$synthesis$integrated_interpretation) &&
     interpretation_word_count(candidate_integrated) >= 80L &&
       text_is_synthesis_grounded(candidate_integrated, exchanges)
-  ) {
+  if (integrated_accepted) {
     synthesis$integrated_interpretation <- candidate_integrated
   }
   candidate_takeaway <- sanitize_integrated_narrative(
     candidate_synthesis$summary,
     fallback$synthesis$summary
   )
-  if (
+  takeaway_accepted <-
+    !identical(candidate_takeaway, fallback$synthesis$summary) &&
     interpretation_word_count(candidate_takeaway) >= 25L &&
       text_is_synthesis_grounded(candidate_takeaway, exchanges)
-  ) {
+  if (takeaway_accepted) {
     synthesis$summary <- candidate_takeaway
   }
   # Deterministic code retains control of the executive title, convergence,
@@ -2388,6 +2390,8 @@ parse_ollama_interpretation <- function(
       "Generated locally from structured, row-grounded result digests.",
     agents = entries,
     synthesis = synthesis,
+    synthesis_generated = integrated_accepted || takeaway_accepted,
+    synthesis_integrated_generated = integrated_accepted,
     exchanges = exchanges
   )
 }

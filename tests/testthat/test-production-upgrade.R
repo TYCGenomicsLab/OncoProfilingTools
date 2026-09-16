@@ -315,6 +315,39 @@ testthat::test_that("23 detailed report embeds researcher synthesis and interact
   testthat::expect_false(grepl("<h3>Interpretation limits", html, fixed = TRUE))
 })
 
+testthat::test_that("23c an Ollama synthesis rejected by evidence checks is not mislabeled as generated", {
+  bundle <- generate_interpretation_bundle(
+    list(go = data.frame(Description = "DNA repair", p.adjust = 1e-6, Count = 18)),
+    list(enabled = FALSE)
+  )
+  repeated <- jsonlite::toJSON(list(
+    contract_version = interpretation_contract_version,
+    agents = list(go = list(summary = bundle$agents$go$summary)),
+    synthesis = list(
+      integrated_interpretation = bundle$synthesis$integrated_interpretation,
+      summary = bundle$synthesis$summary
+    )
+  ), auto_unbox = TRUE)
+  parsed <- parse_ollama_interpretation(repeated, bundle$exchanges,
+    normalise_ollama_settings(list(model = "test-model")), bundle)
+  testthat::expect_false(parsed$synthesis_generated)
+  local <- bundle
+  local$source <- "ollama"
+  local$model <- "test-model"
+  bundle$comparison <- list(ollama = local, primary_provider = "ollama")
+  bundle$source <- "comparison"
+  views <- report_interpretation_tab_views(bundle)$views
+  testthat::expect_false(views$ollama$available)
+  testthat::expect_match(views$ollama$html, "No distinct model-generated synthesis", fixed = TRUE)
+  local$synthesis_generated <- TRUE
+  local$synthesis_integrated_generated <- FALSE
+  local$synthesis$summary <- "Distinct grounded Ollama synthesis"
+  bundle$comparison$ollama <- local
+  views <- report_interpretation_tab_views(bundle)$views
+  testthat::expect_true(views$ollama$available)
+  testthat::expect_match(views$ollama$html, "Distinct grounded Ollama synthesis", fixed = TRUE)
+})
+
 testthat::test_that("23a pathway member table preserves source genes counts and significance", {
   go_file <- tempfile(fileext = ".csv")
   kegg_file <- tempfile(fileext = ".csv")
