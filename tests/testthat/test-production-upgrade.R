@@ -328,8 +328,10 @@ testthat::test_that("23c an Ollama synthesis rejected by evidence checks is not 
       summary = bundle$synthesis$summary
     )
   ), auto_unbox = TRUE)
-  parsed <- parse_ollama_interpretation(repeated, bundle$exchanges,
-    normalise_ollama_settings(list(model = "test-model")), bundle)
+  parsed <- parse_ollama_interpretation(
+    repeated, bundle$exchanges,
+    normalise_ollama_settings(list(model = "test-model")), bundle
+  )
   testthat::expect_false(parsed$synthesis_generated)
   local <- bundle
   local$source <- "ollama"
