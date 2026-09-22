@@ -148,6 +148,19 @@ testthat::test_that("completed interpretations persist only for the matching run
   testthat::expect_identical(restored$model, "test-model")
   testthat::expect_null(read_completed_interpretation("run-b", cache_file))
 
+  openai <- completed
+  openai$source <- "openai"
+  openai$synthesis$integrated_interpretation <- "saved GPT interpretation"
+  ollama <- completed
+  ollama$synthesis$integrated_interpretation <- "saved Ollama interpretation"
+  comparison <- openai
+  comparison$source <- "comparison"
+  comparison$comparison <- list(primary_provider = "openai", openai = openai, ollama = ollama)
+  testthat::expect_true(persist_completed_interpretation("run-comparison", comparison, cache_file))
+  restored_comparison <- read_completed_interpretation("run-comparison", cache_file)
+  testthat::expect_identical(restored_comparison$comparison$openai$synthesis$integrated_interpretation, "saved GPT interpretation")
+  testthat::expect_identical(restored_comparison$comparison$ollama$synthesis$integrated_interpretation, "saved Ollama interpretation")
+
   progress <- build_ollama_progress_bundle(exchanges, "generating", "test-model")
   testthat::expect_false(persist_completed_interpretation("run-a", progress, cache_file))
 })
@@ -173,8 +186,40 @@ testthat::test_that("Results Center reserves 3D interaction UI for STRING", {
 
   testthat::expect_match(tab_source, 'identical(key, "string")', fixed = TRUE)
   testthat::expect_match(tab_source, "connected 3D network", fixed = TRUE)
+  testthat::expect_match(helper_source, "Bar Graph View", fixed = TRUE)
+  testthat::expect_match(helper_source, "3D Graph View", fixed = TRUE)
   testthat::expect_false(grepl("result-table-panel", tab_source, fixed = TRUE))
   testthat::expect_false(grepl("Connected 3D rank profile", helper_source, fixed = TRUE))
+  provider_source <- paste(deparse(body(provider_comparison_agent_ui)), collapse = "\n")
+  testthat::expect_match(provider_source, "tabsetPanel", fixed = TRUE)
+  testthat::expect_match(provider_source, "GPT Interpretation", fixed = TRUE)
+  testthat::expect_match(provider_source, "Ollama Interpretation", fixed = TRUE)
+})
+
+testthat::test_that("live researcher interpretation switches distinct provider content", {
+  exchanges <- list(build_agent_exchange("go", data.frame(Description = "DNA repair")))
+  base <- build_rule_interpretation_bundle(exchanges)
+  openai <- base
+  openai$source <- "openai"
+  openai$model <- "gpt-test"
+  openai$synthesis$integrated_interpretation <- "LIVE_GPT_INTERPRETATION"
+  openai$synthesis_generated <- TRUE
+  ollama <- base
+  ollama$source <- "ollama"
+  ollama$model <- "ollama-test"
+  ollama$synthesis$integrated_interpretation <- "LIVE_OLLAMA_INTERPRETATION"
+  ollama$synthesis_generated <- TRUE
+  comparison <- openai
+  comparison$source <- "comparison"
+  comparison$comparison <- list(primary_provider = "openai", openai = openai, ollama = ollama)
+
+  rendered <- as.character(build_cross_agent_synthesis_ui(comparison))
+  testthat::expect_match(rendered, "GPT Interpretation", fixed = TRUE)
+  testthat::expect_match(rendered, "Ollama Interpretation", fixed = TRUE)
+  testthat::expect_match(rendered, "Technical Interpretation", fixed = TRUE)
+  testthat::expect_match(rendered, "LIVE_GPT_INTERPRETATION", fixed = TRUE)
+  testthat::expect_match(rendered, "LIVE_OLLAMA_INTERPRETATION", fixed = TRUE)
+  testthat::expect_match(rendered, "live-shared-interpretation-box", fixed = TRUE)
 })
 
 testthat::test_that("the parent watchdog recognizes a hung interpretation worker", {

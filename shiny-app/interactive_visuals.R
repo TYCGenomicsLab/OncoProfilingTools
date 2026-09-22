@@ -22,6 +22,26 @@ visual_clean_labels <- function(values, maximum = 72L) {
   substr(values, 1L, maximum)
 }
 
+visual_overlap_counts <- function(data) {
+  count_column <- visual_numeric_column(data, c("Count", "overlap", "gene_count"))
+  if (!is.null(count_column)) {
+    values <- suppressWarnings(as.numeric(as.character(data[[count_column]])))
+    return(round(values))
+  }
+  ratio_column <- names(data)[tolower(gsub("[^a-z0-9]", "", names(data))) == "generatio"]
+  if (length(ratio_column)) {
+    numerator <- suppressWarnings(as.numeric(sub("/.*$", "", as.character(data[[ratio_column[[1L]]]]))))
+    if (any(is.finite(numerator))) return(round(numerator))
+  }
+  gene_column <- names(data)[tolower(gsub("[^a-z0-9]", "", names(data))) %in%
+    c("geneid", "genes", "coreenrichment", "leadingedge")]
+  if (!length(gene_column)) return(rep(NA_real_, nrow(data)))
+  vapply(as.character(data[[gene_column[[1L]]]]), function(value) {
+    genes <- unique(trimws(unlist(strsplit(value, "[/;,|[:space:]]+", perl = TRUE))))
+    as.numeric(length(genes[nzchar(genes)]))
+  }, numeric(1))
+}
+
 result_visual_summary <- function(data, agent_id, maximum_rows = 12L) {
   data <- as.data.frame(data, stringsAsFactors = FALSE, check.names = FALSE)
   if (!nrow(data)) return(NULL)
@@ -44,14 +64,18 @@ result_visual_summary <- function(data, agent_id, maximum_rows = 12L) {
     tertiary_label <- "Observed range"
   } else {
     p_column <- visual_numeric_column(data, c("p.adjust", "Adjusted.P.value", "qvalue", "FDR", "pvalue", "P.value"))
-    primary_column <- switch(
+    enrichment_agent <- agent_id %in% c("go", "kegg", "reactome", "wikipathways", "hallmark")
+    primary_column <- if (enrichment_agent) NULL else switch(
       agent_id,
       chea = visual_numeric_column(data, c("Combined.Score", "Odds.Ratio")),
       string = visual_numeric_column(data, c("degree", "combined_score_prop", "combined_score")),
       drug = visual_numeric_column(data, c("Mean_Response", "Response", "AUC", "IC50", "sensitivity")),
       NULL
     )
-    if (is.null(primary_column) && !is.null(p_column)) {
+    if (enrichment_agent) {
+      primary <- visual_overlap_counts(data)
+      metric <- "Overlap Count"
+    } else if (is.null(primary_column) && !is.null(p_column)) {
       probability <- suppressWarnings(as.numeric(as.character(data[[p_column]])))
       probability[!is.finite(probability) | probability <= 0] <- .Machine$double.xmin
       primary <- pmin(-log10(probability), 300)
@@ -66,11 +90,11 @@ result_visual_summary <- function(data, agent_id, maximum_rows = 12L) {
       metric <- gsub("_", " ", primary_column)
     }
 
-    secondary_column <- visual_numeric_column(data, c("Count", "Measurements", "degree", "FoldEnrichment", "Odds.Ratio"))
+    secondary_column <- if (enrichment_agent) NULL else visual_numeric_column(data, c("Count", "Measurements", "degree", "FoldEnrichment", "Odds.Ratio"))
     tertiary_column <- visual_numeric_column(data, c("FoldEnrichment", "RichFactor", "Rank", "GeneRatio", "Combined.Score"))
-    secondary <- if (is.null(secondary_column)) seq_len(nrow(data)) else suppressWarnings(as.numeric(as.character(data[[secondary_column]])))
+    secondary <- if (enrichment_agent) primary else if (is.null(secondary_column)) seq_len(nrow(data)) else suppressWarnings(as.numeric(as.character(data[[secondary_column]])))
     tertiary <- if (is.null(tertiary_column)) rank(primary, ties.method = "average", na.last = "keep") else suppressWarnings(as.numeric(as.character(data[[tertiary_column]])))
-    secondary_label <- if (is.null(secondary_column)) "Result order" else gsub("_", " ", secondary_column)
+    secondary_label <- if (enrichment_agent) "Overlap Count" else if (is.null(secondary_column)) "Result order" else gsub("_", " ", secondary_column)
     tertiary_label <- if (is.null(tertiary_column)) "Metric rank" else gsub("_", " ", tertiary_column)
   }
 
@@ -106,6 +130,9 @@ result_visual_summary <- function(data, agent_id, maximum_rows = 12L) {
 professional_bar_plot <- function(summary, title) {
   if (is.null(summary) || !requireNamespace("plotly", quietly = TRUE)) return(NULL)
   data <- summary$data
+  count_metric <- identical(summary$metric, "Overlap Count")
+  data$primary_display <- if (count_metric) format(as.integer(round(data$primary)), scientific = FALSE) else format(signif(data$primary, 4), trim = TRUE)
+  data$secondary_display <- if (count_metric) format(as.integer(round(data$secondary)), scientific = FALSE) else format(signif(data$secondary, 4), trim = TRUE)
   # R plotly passes named palettes through grDevices::col2rgb() when a
   # continuous colour variable is mapped. Plotly.js names such as "Tealgrn"
   # are therefore interpreted as literal R colours and fail at render time.
@@ -124,8 +151,8 @@ professional_bar_plot <- function(summary, title) {
     type = "bar",
     orientation = "h",
     hovertext = ~paste0(
-      "<b>", label, "</b><br>", summary$metric, ": ", signif(primary, 4),
-      "<br>", summary$secondary_label, ": ", signif(secondary, 4),
+      "<b>", label, "</b><br>", summary$metric, ": ", primary_display,
+      "<br>", summary$secondary_label, ": ", secondary_display,
       "<br>", summary$tertiary_label, ": ", signif(tertiary, 4)
     ),
     hoverinfo = "text",
@@ -136,7 +163,7 @@ professional_bar_plot <- function(summary, title) {
   ) |>
     plotly::layout(
       title = list(text = paste0("<b>", title, "</b><br><sup>Top result-wide features · hover for exact evidence</sup>"), x = 0.02),
-      xaxis = list(title = summary$metric, zeroline = FALSE, gridcolor = "#e4e9e4"),
+      xaxis = list(title = summary$metric, zeroline = FALSE, gridcolor = "#e4e9e4", tickformat = if (count_metric) "d" else NULL),
       yaxis = list(title = "", automargin = TRUE),
       margin = list(l = 225, r = 30, t = 74, b = 58),
       paper_bgcolor = "#fffdf8",

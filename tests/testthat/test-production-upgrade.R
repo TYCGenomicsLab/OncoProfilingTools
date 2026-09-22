@@ -192,7 +192,7 @@ testthat::test_that("20 progress reports are forced to a terminal export state",
   testthat::expect_false(grepl("OLLAMA GENERATING|Analyzing full result table", html))
 })
 
-testthat::test_that("21 interactive visual summaries produce professional bar and 3D metrics", {
+testthat::test_that("21 interactive visual summaries produce bar and 3D metrics", {
   data <- data.frame(
     Description = c("DNA repair", "Cell cycle", "Apoptosis"),
     p.adjust = c(1e-6, 1e-4, 0.01),
@@ -201,7 +201,8 @@ testthat::test_that("21 interactive visual summaries produce professional bar an
   )
   summary <- result_visual_summary(data, "go")
   testthat::expect_equal(nrow(summary$data), 3L)
-  testthat::expect_match(summary$metric, "−log10", fixed = TRUE)
+  testthat::expect_identical(summary$metric, "Overlap Count")
+  testthat::expect_identical(summary$data$primary, c(7, 12, 18))
   bar_plot <- professional_bar_plot(summary, "GO")
   testthat::expect_s3_class(bar_plot, "plotly")
   built <- plotly::plotly_build(bar_plot)
@@ -279,6 +280,8 @@ testthat::test_that("23 detailed report embeds researcher synthesis and interact
   result_files$go$csv <<- fixture
   on.exit(result_files$go$csv <<- original, add = TRUE)
   bundle <- generate_interpretation_bundle(list(go = safe_result_csv(fixture)), list(enabled = FALSE))
+  bundle$synthesis$literature_context <- "Retrieved literature context marker."
+  bundle$agents$go$cancer_relevance <- "Mapped cancer relevance marker."
   build_combined_html_report(report, bundle, "go")
   html <- paste(readLines(report, warn = FALSE), collapse = "\n")
   testthat::expect_match(html, "RESEARCHER SYNTHESIS", fixed = TRUE)
@@ -287,16 +290,16 @@ testthat::test_that("23 detailed report embeds researcher synthesis and interact
   testthat::expect_false(grepl("Recommended validation priorities", html, fixed = TRUE))
   testthat::expect_match(html, "Biomarker Evidence Interpretation", fixed = TRUE)
   testthat::expect_false(grepl("Plain-language overview|Technical integrated interpretation", html))
-  testthat::expect_match(html, ">OpenAI</button>", fixed = TRUE)
-  testthat::expect_match(html, ">Ollama</button>", fixed = TRUE)
+  testthat::expect_match(html, ">GPT Interpretation</button>", fixed = TRUE)
+  testthat::expect_match(html, ">Ollama Interpretation</button>", fixed = TRUE)
   testthat::expect_match(html, ">Technical Interpretation</button>", fixed = TRUE)
   testthat::expect_identical(lengths(regmatches(html, gregexpr("class='shared-interpretation-box researcher-editable'", html, fixed = TRUE))), 1L)
   testthat::expect_match(html, "document.querySelectorAll('.interpretation-switcher').forEach", fixed = TRUE)
   testthat::expect_match(html, "<!doctype html>\\n", fixed = TRUE)
   testthat::expect_match(html, "showInterpretation", fixed = TRUE)
   testthat::expect_match(html, "saveCurrentInterpretation", fixed = TRUE)
-  testthat::expect_match(html, "OpenAI interpretation unavailable for this run", fixed = TRUE)
-  testthat::expect_match(html, "Ollama interpretation unavailable for this run", fixed = TRUE)
+  testthat::expect_match(html, "GPT Interpretation is unavailable for this run", fixed = TRUE)
+  testthat::expect_match(html, "Ollama Interpretation is unavailable for this run", fixed = TRUE)
   testthat::expect_match(html, "Prompts and rules used", fixed = TRUE)
   testthat::expect_match(html, "No language-model prompt runs in rules-based mode", fixed = TRUE)
   testthat::expect_match(html, "STRUCTURED RESULT DIGEST INSERTED HERE AT RUN TIME", fixed = TRUE)
@@ -307,7 +310,9 @@ testthat::test_that("23 detailed report embeds researcher synthesis and interact
   testthat::expect_match(html, "Download edited HTML", fixed = TRUE)
   testthat::expect_match(html, "3 enriched terms; <strong>3</strong> satisfy p.adjust ≤ 0.05", fixed = TRUE)
   testthat::expect_match(html, "Generated with: Rules-based / deterministic", fixed = TRUE)
-  testthat::expect_match(html, "literature support and novelty were not assessed", fixed = TRUE)
+  testthat::expect_match(html, "Retrieved literature context marker.", fixed = TRUE)
+  testthat::expect_match(html, "Mapped cancer relevance marker.", fixed = TRUE)
+  testthat::expect_match(html, "Novelty &amp; Literature Context", fixed = TRUE)
   testthat::expect_false(grepl("plotly-3d-", html, fixed = TRUE))
   testthat::expect_false(grepl("Full-precision result preview", html, fixed = TRUE))
   testthat::expect_false(grepl("<h3>Result-grounded research hypotheses", html, fixed = TRUE))
@@ -373,12 +378,12 @@ testthat::test_that("23c an Ollama synthesis rejected by evidence checks is not 
   testthat::expect_match(views$ollama$html, "Distinct grounded Ollama synthesis", fixed = TRUE)
 })
 
-testthat::test_that("23a pathway member table preserves source genes counts and significance", {
+testthat::test_that("23a pathway table and graph share integer overlap records and standard columns", {
   go_file <- tempfile(fileext = ".csv")
   kegg_file <- tempfile(fileext = ".csv")
   on.exit(unlink(c(go_file, kegg_file)), add = TRUE)
-  readr::write_csv(data.frame(Description = "DNA repair", geneID = "TP53/BRCA1", Count = 2, p.adjust = 1e-4), go_file)
-  readr::write_csv(data.frame(Description = "Cell cycle", geneID = "CDK1/CCNB1", Count = 2, p.adjust = 2e-3), kegg_file)
+  readr::write_csv(data.frame(Description = "DNA repair", geneID = "TP53/BRCA1", Count = 2.0, BgRatio = "18/18800", GeneRatio = "2/100", p.adjust = 1e-4), go_file)
+  readr::write_csv(data.frame(Description = "Cell cycle", geneID = "CDK1/CCNB1", Count = 2.00, BgRatio = "35/18800", GeneRatio = "2/100", p.adjust = 2e-3), kegg_file)
   original_go <- result_files$go$csv
   original_kegg <- result_files$kegg$csv
   result_files$go$csv <<- go_file
@@ -393,9 +398,40 @@ testthat::test_that("23a pathway member table preserves source genes counts and 
 
   html <- report_pathway_member_table_html(c("go", "kegg"))
   testthat::expect_match(html, "DNA repair", fixed = TRUE)
-  testthat::expect_match(html, "TP53, BRCA1", fixed = TRUE)
   testthat::expect_match(html, "Cell cycle", fixed = TRUE)
-  testthat::expect_match(html, "p.adjust", fixed = TRUE)
+  headers <- regmatches(html, gregexpr("<th scope='col'>[^<]+</th>", html))[[1L]]
+  testthat::expect_identical(headers, paste0("<th scope='col'>", c("Source", "Term", "Overlap", "BG Ratio", "Gene Ratio", "p.adjust"), "</th>"))
+  testthat::expect_match(html, "Overlap Count", fixed = TRUE)
+  testthat::expect_false(grepl(">2\\.0+<", html))
+  testthat::expect_match(html, "1e-04", fixed = TRUE)
+  testthat::expect_false(grepl("Significance Metric|Significance Value", html))
+})
+
+testthat::test_that("23d downloaded reports retain distinct GPT and Ollama payloads", {
+  report <- tempfile(fileext = ".html")
+  on.exit(unlink(report), add = TRUE)
+  fixture <- data.frame(Description = "DNA repair", geneID = "TP53/BRCA1", Count = 2, p.adjust = 1e-4)
+  base <- generate_interpretation_bundle(list(go = fixture), list(enabled = FALSE))
+  openai <- base
+  openai$source <- "openai"
+  openai$model <- "gpt-test"
+  openai$synthesis$integrated_interpretation <- "DISTINCT_GPT_INTERPRETATION"
+  openai$synthesis_generated <- TRUE
+  ollama <- base
+  ollama$source <- "ollama"
+  ollama$model <- "ollama-test"
+  ollama$synthesis$integrated_interpretation <- "DISTINCT_OLLAMA_INTERPRETATION"
+  ollama$synthesis_generated <- TRUE
+  bundle <- openai
+  bundle$source <- "comparison"
+  bundle$comparison <- list(primary_provider = "openai", openai = openai, ollama = ollama)
+  build_combined_html_report(report, bundle, "go")
+  html <- paste(readLines(report, warn = FALSE), collapse = "\n")
+  testthat::expect_match(html, "DISTINCT_GPT_INTERPRETATION", fixed = TRUE)
+  testthat::expect_match(html, "DISTINCT_OLLAMA_INTERPRETATION", fixed = TRUE)
+  testthat::expect_identical(lengths(regmatches(html, gregexpr("class='shared-interpretation-box researcher-editable'", html, fixed = TRUE))), 1L)
+  testthat::expect_match(html, ">GPT Interpretation</button>", fixed = TRUE)
+  testthat::expect_match(html, ">Ollama Interpretation</button>", fixed = TRUE)
 })
 
 testthat::test_that("23b report keeps a documented 3D network for STRING only", {

@@ -487,7 +487,7 @@ result_tab_ui <- function(key, title, description) {
   visualization_copy <- if (identical(key, "string")) {
     paste(description, "Compare hub degree in the bar view, then inspect retrieved protein associations in the connected 3D network.")
   } else {
-    paste(description, "Use the professional bar view for clear, exact result comparison.")
+    paste(description, "Use the bar graph view for clear, exact result comparison.")
   }
 
   tabPanel(
@@ -914,14 +914,17 @@ provider_comparison_agent_ui <- function(bundle, agent_id) {
       )
     )
   }
+  selected_provider <- if (identical(comparison$primary_provider, "ollama")) "Ollama Interpretation" else "GPT Interpretation"
   shiny::tags$details(
     class = "provider-comparison-shell",
     open = "open",
-    shiny::tags$summary("Ollama vs OpenAI · controlled interpretation comparison"),
-    shiny::div(
-      class = "provider-comparison-grid",
-      provider_card(comparison$ollama, "Ollama", premium = FALSE),
-      provider_card(comparison$openai, "OpenAI", premium = TRUE)
+    shiny::tags$summary("GPT / Ollama interpretation record"),
+    shiny::tabsetPanel(
+      id = paste0("provider_interpretation_", agent_id),
+      type = "pills",
+      selected = selected_provider,
+      shiny::tabPanel("GPT Interpretation", provider_card(comparison$openai, "OpenAI", premium = TRUE)),
+      shiny::tabPanel("Ollama Interpretation", provider_card(comparison$ollama, "Ollama", premium = FALSE))
     ),
     shiny::p(class = "provider-comparison-disclaimer", paste("Primary report narrative:", toupper(comparison$primary_provider %or_else% "computed"), "· Longer prose is not automatically more scientifically correct."))
   )
@@ -996,7 +999,7 @@ build_agent_interpretation <- function(agent_id, data, entry = NULL, bundle = NU
     shiny::div(
       class = "interpretation-section",
       shiny::h4("Cancer relevance"),
-      shiny::p(entry$cancer_relevance)
+      shiny::p(entry$cancer_relevance %or_else% "Cancer relevance was not available for this analysis result.")
     )
   )
 }
@@ -1049,6 +1052,98 @@ consolidated_hypothesis_ui <- function(synthesis) {
   )
 }
 
+live_interpretation_view <- function(bundle, provider) {
+  value <- if (!is.null(bundle$comparison[[provider]])) {
+    bundle$comparison[[provider]]
+  } else if (identical(tolower(as.character(bundle$source %or_else% "")), provider)) {
+    bundle
+  } else NULL
+  provider_label <- if (identical(provider, "openai")) "OpenAI" else "Ollama"
+  if (is.null(value) || !identical(tolower(as.character(value$source %or_else% "")), provider)) {
+    return(list(
+      available = FALSE,
+      ui = shiny::tagList(
+        shiny::p(class = "provider-provenance", paste(provider_label, "status: unavailable")),
+        shiny::p(paste(provider_label, "interpretation is unavailable because this provider did not complete this run."))
+      )
+    ))
+  }
+
+  synthesis <- value$synthesis %or_else% list()
+  model_narrative <- if (identical(value$synthesis_integrated_generated, FALSE)) NULL else
+    synthesis$integrated_interpretation %or_else% synthesis$deep_narrative %or_else% synthesis$summary
+  computed_narrative <- if (length(value$exchanges %or_else% list())) {
+    rule_cross_agent_synthesis(value$exchanges)$integrated_interpretation
+  } else NULL
+  generated <- if (is.null(value$synthesis_generated)) {
+    !is.null(model_narrative) && (is.null(computed_narrative) || !identical(model_narrative, computed_narrative))
+  } else isTRUE(value$synthesis_generated)
+  accepted <- value$accepted_agent_interpretations %or_else% list()
+
+  if (generated && !is.null(model_narrative)) {
+    content <- shiny::div(class = "deep-narrative-text", deep_narrative_ui(model_narrative))
+  } else if (length(accepted)) {
+    selected <- utils::head(accepted, 3L)
+    content <- shiny::tagList(
+      shiny::p("The cross-agent synthesis did not pass evidence checks. Validated provider-generated agent interpretations are shown instead."),
+      lapply(names(selected), function(agent_id) shiny::p(shiny::strong(paste0(toupper(agent_id), ": ")), selected[[agent_id]]))
+    )
+  } else {
+    return(list(
+      available = FALSE,
+      ui = shiny::tagList(
+        shiny::p(class = "provider-provenance", paste(provider_label, "status: unavailable /", value$model %or_else% "model not recorded")),
+        shiny::p(paste(provider_label, "completed without a distinct interpretation that passed evidence checks. Technical Interpretation remains available."))
+      )
+    ))
+  }
+
+  list(
+    available = TRUE,
+    ui = shiny::tagList(
+      shiny::p(class = "provider-provenance", paste("Generated with:", provider_label, "/", value$model %or_else% "model not recorded")),
+      content
+    )
+  )
+}
+
+live_interpretation_tabs <- function(bundle) {
+  openai <- live_interpretation_view(bundle, "openai")
+  ollama <- live_interpretation_view(bundle, "ollama")
+  exchanges <- bundle$exchanges %or_else% list()
+  technical <- if (length(exchanges)) rule_cross_agent_synthesis(exchanges) else bundle$synthesis %or_else% list()
+  technical_text <- technical$deep_narrative %or_else% technical$integrated_interpretation %or_else% technical$summary %or_else%
+    "Technical interpretation is unavailable because no completed evidence exchange was recorded."
+  requested <- if (identical(tolower(as.character(bundle$comparison$primary_provider %or_else% bundle$source %or_else% "")), "ollama")) {
+    "Ollama Interpretation"
+  } else "GPT Interpretation"
+  selected <- if (identical(requested, "GPT Interpretation") && openai$available) {
+    requested
+  } else if (identical(requested, "Ollama Interpretation") && ollama$available) {
+    requested
+  } else "Technical Interpretation"
+
+  shiny::div(
+    class = "live-researcher-interpretation",
+    shiny::h3("Biomarker Evidence Interpretation"),
+    shiny::tabsetPanel(
+      id = "consolidated_interpretation_provider",
+      type = "pills",
+      selected = selected,
+      shiny::tabPanel("GPT Interpretation", shiny::div(class = "live-shared-interpretation-box", openai$ui)),
+      shiny::tabPanel("Ollama Interpretation", shiny::div(class = "live-shared-interpretation-box", ollama$ui)),
+      shiny::tabPanel(
+        "Technical Interpretation",
+        shiny::div(
+          class = "live-shared-interpretation-box",
+          shiny::p(class = "provider-provenance", "Generated with: Rules-based / deterministic evidence synthesis"),
+          shiny::div(class = "deep-narrative-text", deep_narrative_ui(technical_text))
+        )
+      )
+    )
+  )
+}
+
 build_cross_agent_synthesis_ui <- function(bundle) {
   synthesis <- bundle$synthesis
   if (is_interpretation_progress_bundle(bundle)) {
@@ -1065,12 +1160,7 @@ build_cross_agent_synthesis_ui <- function(bundle) {
   div(
     class = "cross-agent-content",
     interpretation_source_ui(bundle),
-    div(class = "cross-agent-summary", h3(synthesis$title %or_else% "Integrated interpretation"), p(synthesis$summary)),
-    div(
-      class = "cross-agent-narrative",
-      h4(if (!is.null(synthesis$deep_narrative)) "Deep integrated interpretation" else "Integrated biological model"),
-      div(class = "deep-narrative-text", deep_narrative_ui(synthesis$deep_narrative %or_else% synthesis$integrated_interpretation %or_else% synthesis$summary))
-    ),
+    live_interpretation_tabs(bundle),
     div(
       class = "cross-agent-grid",
       div(h4("Convergent signals"), tags$ul(convergences)),
@@ -1081,7 +1171,11 @@ build_cross_agent_synthesis_ui <- function(bundle) {
         h4("Drug ↔ pathway exchange"),
         p(synthesis$drug_pathway_context)
       ),
-      div(h4("Novelty and literature context"), p(synthesis$novelty_context)),
+      div(h4("Novelty and literature context"), p(
+        synthesis$literature_context %or_else%
+          synthesis$novelty_context %or_else%
+          "No literature evidence was supplied, so literature support and novelty could not be assessed."
+      )),
       consolidated_hypothesis_ui(synthesis)
     )
   )
@@ -1673,9 +1767,9 @@ register_results_server <- function(
 
         tabsetPanel(
           type = "pills",
-          tabPanel("Professional bar view", bar_view),
+          tabPanel("Bar Graph View", bar_view),
           tabPanel(
-            "3D interaction network",
+            "3D Graph View",
             div(
               class = "string-app-network-layout",
               div(

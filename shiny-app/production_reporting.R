@@ -196,6 +196,7 @@ report_interactive_chart_html <- function(key, data, title) {
   summary <- result_visual_summary(data, key)
   if (is.null(summary)) return("<div class='empty'>No quantitative result profile was available for an interactive graph.</div>")
   chart <- summary$data
+  count_metric <- identical(summary$metric, "Overlap Count")
   bar_id <- paste0("plotly-bar-", key)
   colors <- if (identical(key, "drug")) {
     list(c(0, "#443983"), c(0.5, "#21918c"), c(1, "#fde725"))
@@ -204,20 +205,20 @@ report_interactive_chart_html <- function(key, data, title) {
   }
   bar_trace <- list(
     type = "bar", orientation = "h", x = chart$primary, y = chart$label,
-    marker = list(color = chart$secondary, colorscale = colors, showscale = TRUE, colorbar = list(title = summary$secondary_label)),
+    marker = list(color = chart$secondary, colorscale = colors, showscale = !count_metric, colorbar = list(title = summary$secondary_label)),
     customdata = Map(c, chart$secondary, chart$tertiary),
-    hovertemplate = paste0("<b>%{y}</b><br>", summary$metric, ": %{x:.4g}<br>", summary$secondary_label, ": %{customdata[0]:.4g}<br>", summary$tertiary_label, ": %{customdata[1]:.4g}<extra></extra>")
+    hovertemplate = paste0("<b>%{y}</b><br>", summary$metric, if (count_metric) ": %{x:.0f}" else ": %{x:.4g}", "<br>", summary$secondary_label, if (count_metric) ": %{customdata[0]:.0f}" else ": %{customdata[0]:.4g}", "<br>", summary$tertiary_label, ": %{customdata[1]:.4g}<extra></extra>")
   )
   bar_layout <- list(
     title = list(text = paste0("<b>", title, " evidence profile</b><br><sup>Hover for exact values · drag to zoom</sup>"), x = 0.02),
-    xaxis = list(title = summary$metric, zeroline = FALSE, gridcolor = "#e4e9e4"),
+    xaxis = list(title = summary$metric, zeroline = FALSE, gridcolor = "#e4e9e4", tickformat = if (count_metric) "d" else NULL),
     yaxis = list(title = "", automargin = TRUE),
     margin = list(l = 220, r = 35, t = 75, b = 60),
     paper_bgcolor = "#fffdf8", plot_bgcolor = "#fffdf8", font = list(color = "#24332d")
   )
   config <- list(displaylogo = FALSE, responsive = TRUE, scrollZoom = TRUE)
   bar_html <- paste0(
-    "<div class='interactive-chart-single'><div id='", bar_id, "' class='interactive-chart'></div></div>",
+    "<h4>Bar Graph View</h4><div class='interactive-chart-single'><div id='", bar_id, "' class='interactive-chart'></div></div>",
     "<script>Plotly.newPlot('", bar_id, "',", report_json(list(bar_trace)), ",", report_json(bar_layout), ",", report_json(config), ");</script>"
   )
   if (!identical(key, "string")) return(bar_html)
@@ -342,27 +343,33 @@ report_pathway_member_rows <- function(
     if (!nrow(data)) next
     term_column <- find_result_column(data, c("Description", "Term", "term", "pathway", "name", "ID"))
     gene_column <- find_result_column(data, c("geneID", "gene_id", "genes", "core_enrichment", "leadingEdge"))
-    count_column <- find_result_column(data, c("Count", "overlap", "gene_count", "setSize"))
-    significance_column <- find_result_column(data, c("p.adjust", "Adjusted.P.value", "padj", "FDR", "qvalue", "pvalue", "P.value"))
-    if (is.null(term_column) || is.null(gene_column)) next
+    count_column <- find_result_column(data, c("Count", "overlap", "gene_count"))
+    bg_ratio_column <- find_result_column(data, c("BgRatio", "BG.Ratio", "bg_ratio", "background_ratio"))
+    gene_ratio_column <- find_result_column(data, c("GeneRatio", "Gene.Ratio", "gene_ratio"))
+    significance_column <- find_result_column(data, c("p.adjust", "Adjusted.P.value", "padj", "FDR", "qvalue"))
+    if (is.null(term_column)) next
     significance <- if (is.null(significance_column)) rep(NA_real_, nrow(data)) else suppressWarnings(as.numeric(data[[significance_column]]))
     order_index <- if (any(is.finite(significance))) order(significance, na.last = TRUE) else seq_len(nrow(data))
     selected <- utils::head(order_index, maximum_per_database)
     rows <- lapply(selected, function(row) {
-      genes <- report_member_genes(data[[gene_column]][[row]])
+      genes <- if (is.null(gene_column)) "" else report_member_genes(data[[gene_column]][[row]])
       fallback_count <- if (nzchar(genes)) length(strsplit(genes, ", ", fixed = TRUE)[[1L]]) else NA_integer_
       recorded_count <- if (is.null(count_column)) NA_real_ else suppressWarnings(as.numeric(data[[count_column]][[row]]))
+      ratio_count <- if (is.null(gene_ratio_column)) NA_real_ else suppressWarnings(as.numeric(sub("/.*$", "", as.character(data[[gene_ratio_column]][[row]]))))
+      overlap <- if (is.finite(recorded_count)) recorded_count else if (is.finite(fallback_count)) fallback_count else ratio_count
+      if (!is.finite(overlap)) return(NULL)
       data.frame(
         Source = agent_titles[[key]],
-        Pathway_or_term = as.character(data[[term_column]][[row]]),
-        Overlapping_genes = genes,
-        Member_count = if (is.finite(recorded_count)) recorded_count else fallback_count,
-        Significance_metric = report_value(significance_column, "Unavailable"),
-        Significance_value = if (is.finite(significance[[row]])) format(significance[[row]], scientific = TRUE, digits = 3) else "Unavailable",
+        Term = as.character(data[[term_column]][[row]]),
+        Overlap = as.integer(round(overlap)),
+        `BG Ratio` = if (is.null(bg_ratio_column)) "Unavailable" else report_value(data[[bg_ratio_column]][[row]], "Unavailable"),
+        `Gene Ratio` = if (is.null(gene_ratio_column)) "Unavailable" else report_value(data[[gene_ratio_column]][[row]], "Unavailable"),
+        `p.adjust` = if (is.finite(significance[[row]])) format(significance[[row]], scientific = TRUE, digits = 4, trim = TRUE) else "Unavailable",
+        check.names = FALSE,
         stringsAsFactors = FALSE
       )
     })
-    output <- c(output, rows)
+    output <- c(output, Filter(Negate(is.null), rows))
   }
   if (!length(output)) return(data.frame())
   do.call(rbind, output)
@@ -371,12 +378,62 @@ report_pathway_member_rows <- function(
 report_pathway_member_table_html <- function(keys = c("go", "kegg", "reactome", "wikipathways", "hallmark")) {
   rows <- report_pathway_member_rows(keys = keys)
   if (!nrow(rows)) {
-    return("<div class='empty'>No saved pathway result included both a term name and a member-gene column.</div>")
+    return("<div class='empty'>No saved pathway result included a term name with an overlap/member count.</div>")
   }
-  paste0(
-    report_preview_table(rows, maximum_rows = nrow(rows)),
-    "<p class='note'>Rows are taken from saved analysis outputs and ranked by the available significance column. Counts and significance values are omitted when the source did not record them.</p>"
+  chart_rows <- rows[order(rows$Overlap, decreasing = FALSE), , drop = FALSE]
+  chart_id <- "plotly-pathway-overlap"
+  chart_labels <- paste0(chart_rows$Source, " · ", chart_rows$Term)
+  trace <- list(
+    type = "bar", orientation = "h", x = chart_rows$Overlap, y = chart_labels,
+    marker = list(color = chart_rows$Overlap, colorscale = list(c(0, "#bdd4c5"), c(1, "#a94f3b")), showscale = FALSE),
+    customdata = chart_rows$Source,
+    hovertemplate = "<b>%{y}</b><br>Overlap Count: %{x:.0f}<extra></extra>"
   )
+  layout <- list(
+    title = list(text = "<b>Pathway and functional overlap</b><br><sup>The graph and table use the same saved result records</sup>", x = 0.02),
+    xaxis = list(title = "Overlap Count", zeroline = FALSE, gridcolor = "#e4e9e4", tickformat = "d"),
+    yaxis = list(title = "", automargin = TRUE),
+    margin = list(l = 280, r = 25, t = 72, b = 55),
+    paper_bgcolor = "#fffdf8", plot_bgcolor = "#fffdf8", font = list(color = "#24332d")
+  )
+  chart_height <- max(360L, min(920L, 110L + 27L * nrow(chart_rows)))
+  table_rows <- rows
+  table_rows$Overlap <- format(as.integer(table_rows$Overlap), scientific = FALSE, trim = TRUE)
+  paste0(
+    "<div id='", chart_id, "' class='interactive-chart pathway-overlap-chart' style='height:", chart_height, "px'></div>",
+    "<script>Plotly.newPlot('", chart_id, "',", report_json(list(trace)), ",", report_json(layout), ",", report_json(list(displaylogo = FALSE, responsive = TRUE)), ");</script>",
+    report_preview_table(table_rows, maximum_rows = nrow(table_rows)),
+    "<p class='note'>Graph and table use the same saved pathway records. Overlap is displayed as an integer; p.adjust retains scientific precision.</p>"
+  )
+}
+
+report_synthesis_context <- function(bundle, fields, empty) {
+  candidates <- list(bundle$synthesis %or_else% list())
+  comparison <- bundle$comparison %or_else% list()
+  primary <- tolower(report_value(comparison$primary_provider, ""))
+  if (nzchar(primary) && !is.null(comparison[[primary]]$synthesis)) {
+    candidates <- c(candidates, list(comparison[[primary]]$synthesis))
+  }
+  for (provider in c("openai", "ollama")) {
+    if (!is.null(comparison[[provider]]$synthesis)) candidates <- c(candidates, list(comparison[[provider]]$synthesis))
+  }
+  for (candidate in candidates) for (field in fields) {
+    value <- candidate[[field]]
+    if (!is.null(value) && length(value) && nzchar(trimws(paste(value, collapse = " ")))) return(paste(value, collapse = " "))
+  }
+  empty
+}
+
+report_cancer_relevance_html <- function(bundle, keys) {
+  entries <- bundle$agents %or_else% list()
+  values <- lapply(intersect(keys, names(entries)), function(key) {
+    value <- entries[[key]]$cancer_relevance
+    if (is.null(value) || !length(value) || !nzchar(trimws(paste(value, collapse = " ")))) return(NULL)
+    paste0("<li><strong>", html_escape_value(agent_titles[[key]]), ":</strong> ", html_escape_value(paste(value, collapse = " ")), "</li>")
+  })
+  values <- Filter(Negate(is.null), values)
+  if (!length(values)) return("<p class='note'>Cancer relevance was not available in the completed interpretation data.</p>")
+  paste0("<ul>", paste0(values, collapse = ""), "</ul>")
 }
 
 report_pathway_overlap_html <- function(keys = c("go", "kegg", "reactome", "wikipathways", "hallmark")) {
@@ -474,7 +531,7 @@ report_interpretation_html <- function(entry) {
       "View named findings and interpretation limits",
       paste0(
         "<h5>Named findings</h5>", report_list_html(entry$key_findings),
-        "<h5>Research relevance</h5><p>", html_escape_value(entry$cancer_relevance %or_else% "Cannot be determined from the current data."), "</p>",
+        "<h5>Cancer relevance</h5><p>", html_escape_value(entry$cancer_relevance %or_else% "Cancer relevance was not available for this analysis result."), "</p>",
         "<h5>Limitations</h5>", report_list_html(entry$limitations)
       ),
       "technical-disclosure"
@@ -549,6 +606,7 @@ report_provider_comparison_html <- function(bundle, selected_agents) {
   if (is.null(comparison) || is.null(comparison$ollama) || is.null(comparison$openai)) return("")
   provider_summary <- function(value, label) {
     usage <- value$usage %or_else% list()
+    validation <- value$validation %or_else% list()
     cost <- suppressWarnings(as.numeric(value$estimated_cost_usd %or_else% NA_real_))
     elapsed <- if (is.finite(value$elapsed_seconds %or_else% NA_real_)) paste0(round(value$elapsed_seconds, 1), " s") else "Not recorded"
     cost_label <- if (is.finite(cost)) paste0("~$", format(cost, digits = 3, nsmall = 3)) else "Local / not recorded"
@@ -558,7 +616,11 @@ report_provider_comparison_html <- function(bundle, selected_agents) {
       "Total tokens" = report_value(usage$total_tokens),
       "HTTP status" = if (is.finite(value$http_status %or_else% NA_real_)) as.character(value$http_status) else "Not recorded",
       "Request ID" = report_value(value$request_id),
-      "Provider diagnostic" = report_value(value$provider_error, if (value$source %in% c("ollama", "openai")) "None" else value$reason)
+      "Provider diagnostic" = report_value(value$provider_error, if (value$source %in% c("ollama", "openai")) "None" else value$reason),
+      "Interpretation validation" = report_value(validation$message),
+      "Grounded retry" = if (isTRUE(validation$retry_attempted)) {
+        if (isTRUE(validation$retry_accepted)) "Accepted" else paste("Not accepted:", report_value(validation$retry_error))
+      } else "Not required"
     ))
     paste0(
       "<article class='provider-card'><span class='kicker'>", html_escape_value(label), "</span><h3>",
@@ -611,7 +673,7 @@ report_interpretation_tab_views <- function(bundle) {
     source <- tolower(report_value(bundle$source, ""))
     if (identical(source, provider) || startsWith(source, paste0(provider, "_"))) bundle else NULL
   }
-  provider_view <- function(provider, label) {
+  provider_view <- function(provider, label, provider_label = label) {
     value <- provider_bundle(provider)
     model_narrative <- if (is.null(value)) NULL else if (identical(value$synthesis_integrated_generated, FALSE)) {
       value$synthesis$summary
@@ -626,7 +688,7 @@ report_interpretation_tab_views <- function(bundle) {
     available <- !is.null(value) && identical(tolower(report_value(value$source, "")), provider) &&
       (generated || agent_level_only)
     if (available) {
-      provenance <- paste0("Generated with: ", label, " / ", report_value(value$model, "model not recorded"),
+      provenance <- paste0("Generated with: ", provider_label, " / ", report_value(value$model, "model not recorded"),
         if (agent_level_only) " · validated agent-level excerpts" else "")
       if (agent_level_only) {
         selected <- utils::head(agent_interpretations, 3L)
@@ -642,7 +704,7 @@ report_interpretation_tab_views <- function(bundle) {
       state <- if (is.null(value)) "This provider was not run." else if (identical(tolower(report_value(value$source, "")), provider)) {
         "No distinct model-generated synthesis passed evidence checks; the computed Technical Interpretation remains available."
       } else interpretation_display_label(value)
-      narrative_html <- paste0("<p>", html_escape_value(paste(label, "interpretation unavailable for this run.", state)), "</p>")
+      narrative_html <- paste0("<p>", html_escape_value(paste(label, "is unavailable for this run.", state)), "</p>")
       provenance <- paste0(label, " status: unavailable", if (!is.null(value$model)) paste0(" / ", value$model) else "")
     }
     list(
@@ -657,8 +719,8 @@ report_interpretation_tab_views <- function(bundle) {
   technical <- if (length(exchanges)) rule_cross_agent_synthesis(exchanges) else bundle$synthesis %or_else% list()
   technical_text <- technical$integrated_interpretation %or_else% technical$summary %or_else% "Technical interpretation is unavailable because no completed evidence exchange was recorded."
   views <- list(
-    openai = provider_view("openai", "OpenAI"),
-    ollama = provider_view("ollama", "Ollama"),
+    openai = provider_view("openai", "GPT Interpretation", "OpenAI"),
+    ollama = provider_view("ollama", "Ollama Interpretation", "Ollama"),
     technical = list(
       label = "Technical Interpretation",
       available = length(exchanges) > 0L,
@@ -782,9 +844,14 @@ build_combined_html_report <- function(
     "</div><div><h3>2. Cross-Database Agreement</h3>", report_pathway_overlap_html(pathway_agents),
     "</div><div><h3>3. Biomarker / Gene Evidence</h3><p>", html_escape_value(synthesis$regulatory_network %or_else% "No consolidated regulator interpretation was available."),
     "</p><h4>ChEA evidence</h4>", chea_evidence,
+    "<h4>Cancer Relevance</h4>", report_cancer_relevance_html(interpretation_bundle, biomarker_agents),
     "</div><div class='wide-card'><h3>4. Pathway and Functional Interpretation</h3>", report_pathway_member_table_html(pathway_agents),
     "</div><div><h3>5. Protein / Interaction Evidence</h3>", string_evidence,
-    "</div><div><h3>6. Literature Context</h3><p>", html_escape_value(synthesis$novelty_context %or_else% "No literature evidence was supplied, so literature support and novelty were not assessed."),
+    "</div><div><h3>6. Novelty &amp; Literature Context</h3><p>", html_escape_value(report_synthesis_context(
+      interpretation_bundle,
+      c("literature_context", "literature_novelty_context", "novelty_context"),
+      "No literature evidence was supplied, so literature support and novelty could not be assessed."
+    )),
     "</p></div><div><h3>7. Potentially Underexplored Findings</h3><p>Potential novelty cannot be assessed from the current analysis because no dedicated literature evidence or citations were supplied. Findings with limited retrieved support require a dedicated search and independent validation.</p>",
     "</div><div><h3>8. Limitations / Uncertainty</h3>", report_list_html(synthesis$limitations),
     "</div><div class='wide-card researcher-editable'><h3>9. Researcher Takeaway</h3><p>", html_escape_value(synthesis$summary %or_else% synthesis$integrated_interpretation %or_else% "A consolidated takeaway was not available."),
@@ -852,7 +919,7 @@ build_combined_html_report <- function(
     "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
     "<title>", html_escape_value(report_title), "</title><style>",
     ":root{--paper:#f7f5ef;--surface:#fffdf8;--sage:#dce8de;--lavender:#e7e1f2;--ink:#24332d;--muted:#627069;--line:#d6ddd7;--accent:#c95f45;--accent-soft:#f6ded6;--drug:#6860a8}",
-    "*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.58 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.page{max-width:1180px;margin:auto;padding:44px 28px 80px}",
+    "*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.58 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.page{max-width:1180px;margin:auto;padding:44px 28px 80px}",
     ".hero,section{margin:0 0 24px;padding:28px;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 16px 42px rgba(52,67,58,.07)}.hero{background:linear-gradient(135deg,var(--sage),var(--surface) 65%)}",
     "h1{margin:10px 0 8px;font-size:38px;line-height:1.1}h2{margin:5px 0 12px;font-size:26px}h3{font-size:21px}h4{margin:24px 0 9px}h5{margin:18px 0 5px}.badge,.kicker{display:inline-block;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.12em}.badge{padding:6px 10px;background:var(--accent-soft);border-radius:999px}.muted,.note,.section-copy,.source,figcaption{color:var(--muted)}",
     ".table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}.table-wrap.compact{max-width:900px}table{width:100%;border-collapse:collapse;background:white;font-size:13px}th,td{padding:10px 12px;border-bottom:1px solid #e8ece8;text-align:left;vertical-align:top;white-space:nowrap}thead th{background:#edf3ee}tbody th{width:240px;background:#f4f7f4}",
@@ -860,11 +927,11 @@ build_combined_html_report <- function(
     "figure{margin:22px 0}img{display:block;max-width:100%;max-height:720px;margin:auto;padding:8px;background:white;border-radius:12px}figcaption{text-align:center;margin-top:8px}.empty{padding:18px;border:1px dashed #aab7ae;border-radius:12px;color:var(--muted)}",
     ".observed-layer,.ai-layer{margin-top:20px;padding:18px;border-radius:14px}.observed-layer{background:#edf5ef;border:1px solid #c9dbcd}.ai-layer{background:#f1edf7;border:1px solid #d8cfea}.observed-layer h4,.ai-layer h4{margin-top:0}.ai-layer h4{color:#51488d}",
     ".report-nav{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0 0}.report-nav a{padding:8px 12px;border-radius:999px;background:#fff;color:var(--ink);text-decoration:none;border:1px solid var(--line);font-weight:700}.run-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.run-facts>div{padding:13px 15px;background:rgba(255,255,255,.82);border:1px solid var(--line);border-radius:12px}.run-facts span{display:block;color:var(--muted);font-size:12px}.run-facts strong{display:block;margin-top:3px;overflow-wrap:anywhere}.executive-summary{padding:20px;background:linear-gradient(135deg,#edf5ef,#f2eef7);border-radius:15px}.deep-narrative-text{line-height:1.72}.deep-narrative-text h4{margin:22px 0 7px;color:#51488d}.deep-narrative-item{margin:8px 0;padding:10px 12px;background:#fffdf8;border-left:3px solid #8cac93;border-radius:6px}.deep-narrative-subitem{margin:5px 0 5px 18px;color:var(--muted)}.synthesis-grid,.comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.synthesis-grid>div,.comparison-grid>div{padding:17px;background:#faf9f5;border:1px solid var(--line);border-radius:13px}.synthesis-grid>.wide-card{grid-column:1/-1}.premium-comparison{background:#f3edf8!important;border-color:#d4c5e4!important}.comparison-agent{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}.comparison-agent h3{margin:0 0 10px}.interactive-chart-single{max-width:980px;margin:auto}.interactive-chart{height:540px;border:1px solid var(--line);border-radius:14px;overflow:hidden}.string-network-block{margin-top:28px}.string-network-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(270px,1fr);gap:18px;align-items:stretch}.string-3d-chart{height:610px}.network-guide{padding:20px;background:linear-gradient(160deg,#edf5ef,#f7f3fb);border:1px solid #cfdcd2;border-radius:14px}.network-guide h4{margin:5px 0 15px}.network-guide h5{margin:18px 0 8px}.network-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.network-stats>div{padding:11px;background:#fffdf8;border:1px solid var(--line);border-radius:10px}.network-stats strong{display:block;font-size:22px;color:#a94f3b}.network-stats span{display:block;color:var(--muted);font-size:11px;line-height:1.35}.network-legend{list-style:none;padding:0;margin:17px 0}.network-legend li{display:grid;grid-template-columns:22px 1fr;gap:9px;align-items:start;margin:10px 0}.network-legend i{display:block;margin-top:4px}.legend-node{width:14px;height:14px;border-radius:50%;background:#d98468;border:2px solid #fff;box-shadow:0 0 0 1px #a94f3b}.legend-edge{width:20px;height:3px;background:#6d8d7d;border-radius:4px}.legend-size{width:17px;height:17px;border-radius:50%;background:linear-gradient(135deg,#bdd4c5,#a94f3b)}.hub-rank-list{padding-left:22px}.hub-rank-list li{padding:5px 0;border-bottom:1px solid rgba(99,119,108,.16)}.hub-rank-list li span{display:inline-block;min-width:80px}.hub-rank-list li strong{font-size:12px;color:#627069}.network-controls{font-size:13px}.network-warning{padding:11px;background:#fff6ee;border-left:4px solid var(--accent);border-radius:8px;font-size:12px}.hub-figure img{max-height:680px}.evidence-card,.hypothesis-card{padding:15px;background:#fffdf8;border:1px solid var(--line);border-radius:11px}.method-callout{padding:18px;border-left:5px solid #6860a8;background:#f2eef7;border-radius:10px}.limitations{background:#fff6ee;border-left:5px solid var(--accent)}code{overflow-wrap:anywhere}@media(max-width:900px){.string-network-layout{grid-template-columns:1fr}.string-3d-chart{height:520px}}@media(max-width:800px){.synthesis-grid,.comparison-grid,.run-facts{grid-template-columns:1fr}.interactive-chart{height:430px}.string-3d-chart{height:470px}}@media(max-width:700px){.page{padding:20px 12px 48px}.hero,section{padding:20px}.agent-section{padding:16px}h1{font-size:30px}.agent-heading{flex-direction:column}th,td{font-size:11px;padding:8px}}",
-    "html{scroll-behavior:smooth}.page{max-width:1120px;padding:28px 22px 64px}.hero,section,.compact-callout{margin-bottom:14px;padding:20px;border-radius:14px;box-shadow:0 5px 18px rgba(52,67,58,.045)}h1{font-size:35px}h2{font-size:24px}h3{margin:16px 0 7px;font-size:19px}h4{margin:14px 0 7px;font-size:17px}p{margin:7px 0 12px}.table-wrap{border-radius:9px}.table-wrap.compact{max-width:none}table{font-size:12px}th,td{padding:7px 9px}tbody th{width:210px}.table-wrap.compact td{white-space:normal;overflow-wrap:anywhere}",
+    "html{scroll-behavior:smooth}.page{max-width:1120px;padding:28px 22px 64px}.hero,section,.compact-callout{margin-bottom:14px;padding:20px;border-radius:14px;box-shadow:0 5px 18px rgba(52,67,58,.045)}h1{font-size:35px}h2{font-size:24px}h3{margin:16px 0 7px;font-size:20px}h4{margin:14px 0 7px;font-size:18px}p{margin:7px 0 12px}.table-wrap{border-radius:9px}.table-wrap.compact{max-width:none}table{font-size:13px}th,td{padding:7px 9px}tbody th{width:210px}.table-wrap.compact td{white-space:normal;overflow-wrap:anywhere}",
     ".workflow-section{border-top-width:5px}.agent-section{margin:14px 0;padding:17px;border-radius:12px}.row-count{padding:5px 8px;font-size:11px}.agent-run-strip{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.agent-pill{display:flex;gap:7px;align-items:center;padding:6px 9px;background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:9px;font-size:12px}.agent-pill span{color:var(--muted)}.observed-layer{margin-top:14px;padding:13px 15px;border-left:4px solid #8cac93;border-radius:8px}.observed-layer h4{margin-top:0}",
     ".audience-grid,.prompt-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.audience-panel{padding:15px;border:1px solid var(--line);border-radius:10px}.plain-reader{background:#edf5ef}.technical-reader{background:#f3edf8;border-color:#d4c5e4}.audience-panel h3,.audience-panel h4{margin-top:5px}.synthesis-grid,.comparison-grid{gap:12px}.synthesis-grid>div,.comparison-grid>div{padding:13px;border-radius:10px}",
     ".report-disclosure,.comparison-agent{margin-top:9px;padding:0;border:1px solid var(--line);border-radius:9px;background:#fff}.report-disclosure>summary,.comparison-agent>summary{padding:9px 11px;cursor:pointer;font-weight:750;color:#3f5149}.report-disclosure[open]>summary,.comparison-agent[open]>summary{border-bottom:1px solid var(--line)}.disclosure-body{padding:11px}.prompt-disclosure pre{max-height:430px;margin:0;overflow:auto;padding:13px;background:#1f2925;color:#eef5f0;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.48 ui-monospace,SFMono-Regular,Menlo,monospace}.mode-note{min-height:48px}.provider-card{padding:15px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.provider-card h3{margin:4px 0}.provider-state{color:var(--muted)}.metric-strip{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.metric-strip>div{padding:8px;background:#fff;border:1px solid var(--line);border-radius:8px}.metric-strip span{display:block;color:var(--muted);font-size:11px}",
-    ".interactive-chart{height:430px;border-radius:10px}.string-3d-chart{height:500px}.string-network-layout{gap:12px}.string-side-panel{padding:14px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.string-side-panel h4{margin-top:0}.string-degree-chart{height:390px}.researcher-interpretation{margin:14px 0;padding:15px;background:#f3edf8;border:1px solid #d4c5e4;border-radius:10px}.researcher-interpretation h3,.researcher-interpretation h4{margin-top:5px}.interpretation-switcher-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.interpretation-view-tabs{display:flex;flex-wrap:wrap;gap:0;border:1px solid #b9aecb;border-radius:9px;overflow:hidden;background:#fff}.interpretation-view-button{padding:8px 12px;border:0;border-right:1px solid #d4c5e4;background:#fff;color:var(--ink);font-weight:750;cursor:pointer}.interpretation-view-button:last-child{border-right:0}.interpretation-view-button.active{background:#62588f;color:#fff}.shared-interpretation-box{min-height:150px;padding:14px;background:#fffdf8;border:1px solid #d4c5e4;border-radius:9px}.shared-interpretation-box p:last-child{margin-bottom:0}.researcher-editable[contenteditable='true']{outline:3px solid rgba(201,95,69,.28);background:#fffaf2}.report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.report-tools button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}.report-tools button:hover{border-color:var(--accent)}.report-tools span{color:var(--muted);font-size:12px}.result-count-note{padding:9px 11px;background:#f5f7f4;border-left:3px solid #8cac93;border-radius:7px}.synthesis-grid td{white-space:normal;min-width:120px}.provider-provenance{font-weight:700}.method-callout{margin-bottom:10px;padding:13px;border-left-width:4px;border-radius:8px}.compact-callout h2{font-size:20px}.limitations{border-left-width:4px}@media(max-width:800px){.audience-grid,.prompt-mode-grid{grid-template-columns:1fr}.mode-note{min-height:0}.interactive-chart{height:390px}.string-3d-chart{height:420px}.string-degree-chart{height:330px}.interpretation-switcher-heading{display:block}.interpretation-view-tabs{margin-top:12px;width:max-content;max-width:100%}}@media(max-width:700px){.page{padding:14px 9px 40px}.hero,section,.compact-callout{padding:15px}.agent-section{padding:13px}h1{font-size:29px}.interpretation-view-tabs{width:100%}.interpretation-view-button{flex:1;padding:8px 6px;font-size:11px}}",
+        ".interactive-chart{height:430px;border-radius:10px}.string-3d-chart{height:500px}.string-network-layout{gap:12px}.string-side-panel{padding:14px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.string-side-panel h4{margin-top:0}.string-degree-chart{height:390px}.researcher-interpretation{margin:14px 0;padding:15px;background:#f3edf8;border:1px solid #d4c5e4;border-radius:10px}.researcher-interpretation h3,.researcher-interpretation h4{margin-top:5px}.interpretation-switcher-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.interpretation-view-tabs{display:flex;flex-wrap:wrap;gap:0;border:1px solid #b9aecb;border-radius:9px;overflow:hidden;background:#fff}.interpretation-view-button{padding:8px 12px;border:0;border-right:1px solid #d4c5e4;background:#fff;color:var(--ink);font-weight:750;cursor:pointer}.interpretation-view-button:last-child{border-right:0}.interpretation-view-button.active{background:#62588f;color:#fff}.shared-interpretation-box{min-height:150px;padding:14px;background:#fffdf8;border:1px solid #d4c5e4;border-radius:9px}.shared-interpretation-box p{white-space:pre-line}.shared-interpretation-box p:last-child{margin-bottom:0}.researcher-editable[contenteditable='true']{outline:3px solid rgba(201,95,69,.28);background:#fffaf2}.report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.report-tools button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}.report-tools button:hover{border-color:var(--accent)}.report-tools span{color:var(--muted);font-size:12px}.result-count-note{padding:9px 11px;background:#f5f7f4;border-left:3px solid #8cac93;border-radius:7px}.synthesis-grid td{white-space:normal;min-width:120px}.provider-provenance{font-weight:700}.method-callout{margin-bottom:10px;padding:13px;border-left-width:4px;border-radius:8px}.compact-callout h2{font-size:20px}.limitations{border-left-width:4px}@media(max-width:800px){.audience-grid,.prompt-mode-grid{grid-template-columns:1fr}.mode-note{min-height:0}.interactive-chart{height:390px}.string-3d-chart{height:420px}.string-degree-chart{height:330px}.interpretation-switcher-heading{display:block}.interpretation-view-tabs{margin-top:12px;width:max-content;max-width:100%}}@media(max-width:700px){.page{padding:14px 9px 40px}.hero,section,.compact-callout{padding:15px}.agent-section{padding:13px}h1{font-size:29px}.interpretation-view-tabs{width:100%}.interpretation-view-button{flex:1;padding:8px 6px;font-size:11px}}",
     "</style>", if (nzchar(plotly_library)) paste0("<script>", plotly_library, "</script>") else "", "</head><body><main class='page'>",
     "<header class='hero'><span class='badge'>", html_escape_value(report_badge), "</span><h1>", html_escape_value(report_title), "</h1><p class='muted'>Self-contained research report · generated ", html_escape_value(generated_at), "</p>",
     "<div class='run-facts'><div><span>Input file</span><strong>", html_escape_value(report_value(input_context$name)), "</strong></div><div><span>Workflow</span><strong>", html_escape_value(workflow), "</strong></div><div><span>Mapped analysis genes</span><strong>", html_escape_value(report_value(mapping$output_symbol_count, report_value(configuration$original_gene_count))), "</strong></div></div>",

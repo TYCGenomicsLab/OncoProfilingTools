@@ -9,6 +9,7 @@ testthat::test_that("Ollama privacy guard accepts loopback hosts only", {
 testthat::test_that("Ollama defaults allow realistic local generation time", {
   settings <- default_ollama_settings()
   testthat::expect_gte(settings$timeout_seconds, 120)
+  testthat::expect_gte(settings$num_ctx, 4096L)
   testthat::expect_gte(settings$num_predict, 128L)
   testthat::expect_lte(settings$num_predict, 4096L)
   testthat::expect_gte(settings$num_predict, 3000L)
@@ -276,5 +277,80 @@ testthat::test_that("valid local Ollama JSON is parsed without HTML execution", 
   testthat::expect_identical(
     bundle$agents$go$biological_context,
     "General biological context: DNA repair terms describe systems that recognize and resolve genomic lesions, while cell-cycle terms describe replication and mitotic control. Their joint appearance can guide a testable program-level hypothesis, but enrichment does not measure pathway activity or establish a causal connection in the submitted samples."
+  )
+})
+
+testthat::test_that("rejected structured Ollama synthesis uses the grounded narrative retry", {
+  data <- list(go = data.frame(Description = "DNA repair", p.adjust = 1e-6, Count = 18))
+  exchange <- build_agent_exchange("go", data$go)
+  fallback <- build_rule_interpretation_bundle(list(exchange))
+  rejected_response <- jsonlite::toJSON(list(
+    contract_version = interpretation_contract_version,
+    agents = list(go = list(summary = fallback$agents$go$summary)),
+    synthesis = list(
+      integrated_interpretation = fallback$synthesis$integrated_interpretation,
+      summary = fallback$synthesis$summary
+    )
+  ), auto_unbox = TRUE)
+  retry_called <- FALSE
+  recovered <- generate_interpretation_bundle(
+    data,
+    settings = list(enabled = TRUE, host = "http://127.0.0.1:11434", model = "test-model"),
+    request_fn = function(prompt, settings) rejected_response,
+    deep_narrative_request_fn = function(exchanges, bundle, settings) {
+      retry_called <<- TRUE
+      "RECOVERED_GROUNDED_OLLAMA_NARRATIVE"
+    }
+  )
+
+  testthat::expect_true(retry_called)
+  testthat::expect_true(recovered$synthesis_generated)
+  testthat::expect_true(recovered$synthesis_integrated_generated)
+  testthat::expect_true(recovered$synthesis_recovered)
+  testthat::expect_identical(recovered$synthesis$integrated_interpretation, "RECOVERED_GROUNDED_OLLAMA_NARRATIVE")
+  testthat::expect_true(recovered$validation$retry_attempted)
+  testthat::expect_true(recovered$validation$retry_accepted)
+})
+
+testthat::test_that("a failed structured Ollama request can recover with the grounded narrative retry", {
+  retry_called <- FALSE
+  bundle <- generate_interpretation_bundle(
+    list(go = data.frame(Description = "DNA repair")),
+    settings = list(enabled = TRUE, host = "http://127.0.0.1:11434", model = "test-model"),
+    request_fn = function(prompt, settings) stop("structured request timed out"),
+    deep_narrative_request_fn = function(exchanges, bundle, settings) {
+      retry_called <<- TRUE
+      "RECOVERED_GROUNDED_OLLAMA_NARRATIVE"
+    }
+  )
+
+  testthat::expect_true(retry_called)
+  testthat::expect_identical(bundle$source, "ollama")
+  testthat::expect_true(bundle$synthesis_generated)
+  testthat::expect_true(bundle$validation$retry_accepted)
+  testthat::expect_identical(
+    bundle$synthesis$integrated_interpretation,
+    "RECOVERED_GROUNDED_OLLAMA_NARRATIVE"
+  )
+})
+
+testthat::test_that("multi-agent Ollama uses the compact grounded synthesis path", {
+  bundle <- generate_interpretation_bundle(
+    list(
+      go = data.frame(Description = "DNA repair"),
+      kegg = data.frame(Description = "Cell cycle")
+    ),
+    settings = list(enabled = TRUE, host = "http://127.0.0.1:11434", model = "test-model"),
+    deep_narrative_request_fn = function(exchanges, bundle, settings) {
+      "COMPACT_GROUNDED_OLLAMA_SYNTHESIS"
+    }
+  )
+
+  testthat::expect_identical(bundle$source, "ollama")
+  testthat::expect_true(bundle$synthesis_generated)
+  testthat::expect_true(bundle$validation$retry_accepted)
+  testthat::expect_identical(
+    bundle$synthesis$integrated_interpretation,
+    "COMPACT_GROUNDED_OLLAMA_SYNTHESIS"
   )
 })

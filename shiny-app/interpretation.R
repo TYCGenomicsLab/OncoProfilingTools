@@ -130,6 +130,7 @@ default_ollama_settings <- function() {
     host = Sys.getenv("ONCOPROFILING_OLLAMA_HOST", "http://127.0.0.1:11434"),
     model = Sys.getenv("ONCOPROFILING_OLLAMA_MODEL", "llama3.1:8b"),
     timeout_seconds = suppressWarnings(as.numeric(Sys.getenv("ONCOPROFILING_OLLAMA_TIMEOUT", "300"))),
+    num_ctx = suppressWarnings(as.integer(Sys.getenv("ONCOPROFILING_OLLAMA_NUM_CTX", "4096"))),
     num_predict = suppressWarnings(as.integer(Sys.getenv("ONCOPROFILING_OLLAMA_NUM_PREDICT", "4096")))
   )
 }
@@ -148,6 +149,7 @@ normalise_ollama_settings <- function(settings = NULL) {
     host = host,
     model = trimws(as.character(settings$model %or_else% defaults$model)),
     timeout_seconds = suppressWarnings(as.numeric(settings$timeout_seconds %or_else% defaults$timeout_seconds)),
+    num_ctx = suppressWarnings(as.integer(settings$num_ctx %or_else% defaults$num_ctx)),
     num_predict = suppressWarnings(as.integer(settings$num_predict %or_else% defaults$num_predict))
   )
 }
@@ -236,6 +238,9 @@ validate_ollama_settings <- function(settings = NULL) {
   }
   if (!is.finite(settings$timeout_seconds) || settings$timeout_seconds <= 0) {
     return("Ollama timeout must be a positive number of seconds.")
+  }
+  if (!is.finite(settings$num_ctx) || settings$num_ctx < 4096L || settings$num_ctx > 131072L) {
+    return("Ollama context length must be between 4096 and 131072 tokens.")
   }
   if (!is.finite(settings$num_predict) || settings$num_predict < 128L || settings$num_predict > 4096L) {
     return("Ollama response length must be between 128 and 4096 tokens.")
@@ -1851,6 +1856,19 @@ ollama_interpretation_quality_issues <- function(response_text) {
   unique(issues)
 }
 
+ollama_streamed_response_text <- function(response) {
+  body <- httr2::resp_body_string(response)
+  lines <- strsplit(body, "\\r?\\n", perl = TRUE)[[1L]]
+  lines <- lines[nzchar(trimws(lines))]
+  chunks <- lapply(lines, function(line) {
+    jsonlite::fromJSON(line, simplifyVector = TRUE)
+  })
+  errors <- vapply(chunks, function(chunk) as.character(chunk$error %or_else% ""), character(1))
+  errors <- errors[nzchar(errors)]
+  if (length(errors)) stop(errors[[1L]], call. = FALSE)
+  paste0(vapply(chunks, function(chunk) as.character(chunk$response %or_else% ""), character(1)), collapse = "")
+}
+
 
 request_ollama_interpretation <- function(prompt, settings = NULL) {
   settings <- normalise_ollama_settings(settings)
@@ -1866,15 +1884,14 @@ request_ollama_interpretation <- function(prompt, settings = NULL) {
       httr2::req_body_json(list(
         model = settings$model,
         prompt = request_prompt,
-        stream = FALSE,
+        stream = TRUE,
         format = ollama_interpretation_schema(),
         keep_alive = "10m",
-        options = list(temperature = 0.1, num_predict = settings$num_predict, repeat_penalty = 1.08)
+        options = list(temperature = 0.1, num_ctx = settings$num_ctx, num_predict = settings$num_predict, repeat_penalty = 1.08)
       )) |>
       httr2::req_timeout(settings$timeout_seconds) |>
       httr2::req_perform()
-    payload <- httr2::resp_body_json(response, simplifyVector = TRUE)
-    text <- as.character(payload$response %or_else% "")
+    text <- ollama_streamed_response_text(response)
     if (!nzchar(text)) stop("Ollama returned an empty response.", call. = FALSE)
     text
   }
@@ -1884,13 +1901,29 @@ request_ollama_interpretation <- function(prompt, settings = NULL) {
 }
 
 build_deep_narrative_prompt <- function(exchanges, structured_bundle) {
-  exchange_json <- jsonlite::toJSON(exchanges, auto_unbox = TRUE, null = "null", pretty = FALSE)
+  compact_exchanges <- lapply(exchanges, function(exchange) {
+    list(
+      agent_id = exchange$agent_id,
+      domain = exchange$domain,
+      row_count = exchange$row_count,
+      representative_findings = utils::head(exchange$representative_findings %or_else% character(), 3L),
+      detected_programs = exchange$detected_programs %or_else% character()
+    )
+  })
+  exchange_json <- jsonlite::toJSON(compact_exchanges, auto_unbox = TRUE, null = "null", pretty = FALSE)
   structured_json <- jsonlite::toJSON(
-    list(agents = structured_bundle$agents, synthesis = structured_bundle$synthesis),
+    list(synthesis = list(
+      summary = structured_bundle$synthesis$summary,
+      regulatory_network = structured_bundle$synthesis$regulatory_network,
+      hub_candidates = structured_bundle$synthesis$hub_candidates,
+      convergences = structured_bundle$synthesis$convergences,
+      next_analyses = structured_bundle$synthesis$next_analyses,
+      limitations = structured_bundle$synthesis$limitations
+    )),
     auto_unbox = TRUE, null = "null", pretty = FALSE
   )
   agent_count <- length(exchanges)
-  target <- if (agent_count > 1L) "900-1400" else "600-900"
+  target <- if (agent_count > 1L) "320-400" else "280-360"
   paste(
     "You are the senior computational biologist writing the final interpretation for a research report.",
     "Write a deep, coherent narrative in polished scientific prose, comparable in clarity and organization to a careful ChatGPT or Gemini analysis.",
@@ -1926,13 +1959,17 @@ request_ollama_deep_narrative <- function(exchanges, structured_bundle, settings
   response <- httr2::request(paste0(settings$host, "/api/generate")) |>
     httr2::req_method("POST") |>
     httr2::req_body_json(list(
-      model = settings$model, prompt = prompt, stream = FALSE, keep_alive = "10m",
-      options = list(temperature = 0.2, num_predict = settings$num_predict, repeat_penalty = 1.08)
+      model = settings$model, prompt = prompt, stream = TRUE, keep_alive = "10m",
+      options = list(
+        temperature = 0.2,
+        num_ctx = settings$num_ctx,
+        num_predict = min(settings$num_predict, 800L),
+        repeat_penalty = 1.08
+      )
     )) |>
     httr2::req_timeout(settings$timeout_seconds) |>
     httr2::req_perform()
-  payload <- httr2::resp_body_json(response, simplifyVector = TRUE)
-  narrative <- as.character(payload$response %or_else% "")
+  narrative <- ollama_streamed_response_text(response)
   narrative <- gsub("```[[:alnum:]_-]*|```", "", narrative, perl = TRUE)
   narrative <- sanitize_deep_narrative(narrative, exchanges)
   if (is.null(narrative)) return(NULL)
@@ -2180,9 +2217,19 @@ sanitize_deep_narrative <- function(value, exchanges) {
     "Validation and next analyses",
     "Interpretive boundaries"
   )
-  if (!all(vapply(required_headings, grepl, logical(1), x = value, fixed = TRUE))) return(NULL)
+  if (!all(vapply(required_headings, function(heading) {
+    grepl(tolower(heading), tolower(value), fixed = TRUE)
+  }, logical(1)))) return(NULL)
   lines <- strsplit(value, "\\r?\\n", perl = TRUE)[[1L]]
-  is_heading <- grepl("^\\s*(\\*\\*)?[[:alpha:]][^.!?]{2,80}(\\*\\*)?\\s*$", lines, perl = TRUE)
+  lines <- unlist(lapply(lines, function(line) {
+    if (!nzchar(trimws(line)) || grepl("^\\s*(\\*\\*)?[[:alpha:]][^.!?]{2,80}(\\*\\*)?\\s*$|^\\s*([*+-]|[0-9]+\\.)\\s*", line, perl = TRUE)) {
+      return(line)
+    }
+    strsplit(line, "(?<=[.!?])\\s+", perl = TRUE)[[1L]]
+  }), use.names = FALSE)
+  normalized_lines <- tolower(trimws(gsub("\\*", "", lines, fixed = FALSE)))
+  is_heading <- grepl("^\\s*\\*\\*[^*]+\\*\\*\\s*$", lines, perl = TRUE) |
+    normalized_lines %in% tolower(required_headings)
   unsupported <- grepl(
     paste(
       "\\bcorrelat(e|ed|es|ing|ion|ions)\\b",
@@ -2190,6 +2237,12 @@ sanitize_deep_narrative <- function(value, exchanges) {
       "suggests? that (the )?(analy[sz]ed )?samples",
       "limited evidence for (the involvement of )?other",
       "pathway activation|activated pathway",
+      "cancer cells? (may|can|could|exploit|use)",
+      "plays? a crucial role",
+      "facilitat(e|es|ing).*cancer progression",
+      "underlying cancer progression|role in cancer progression",
+      "dynamic interplay between cancer cells",
+      "such as those regulated by",
       "patient benefit|clinical efficacy|treatment recommendation|should receive|proves? caus",
       sep = "|"
     ),
@@ -2205,7 +2258,7 @@ sanitize_deep_narrative <- function(value, exchanges) {
     unsupported <- unsupported | (grepl("STRING hubs?|network (hub|model|priorit)", lines, ignore.case = TRUE) & !is_heading)
   }
   lines <- lines[!unsupported]
-  heading_positions <- which(grepl("^\\s*(\\*\\*)?[[:alpha:]][^.!?]{2,80}(\\*\\*)?\\s*$", lines, perl = TRUE))
+  heading_positions <- which(is_heading)
   if (length(heading_positions)) {
     keep_heading <- vapply(seq_along(heading_positions), function(index) {
       start <- heading_positions[[index]] + 1L
@@ -2215,8 +2268,11 @@ sanitize_deep_narrative <- function(value, exchanges) {
     lines <- lines[-heading_positions[!keep_heading]]
   }
   narrative <- trimws(paste(lines, collapse = "\n"))
-  minimum_words <- if (length(exchanges) > 1L) 320L else 220L
+  minimum_words <- if (length(exchanges) > 1L) 240L else 180L
   if (interpretation_word_count(narrative) < minimum_words) return(NULL)
+  narrative <- gsub("**", "", narrative, fixed = TRUE)
+  narrative <- gsub("\\*\\s+", "\n• ", narrative, perl = TRUE)
+  narrative <- gsub("(?m)^\\s*[0-9]+\\.\\s+", "• ", narrative, perl = TRUE)
   narrative
 }
 
@@ -2254,6 +2310,7 @@ parse_ollama_interpretation <- function(
 
   entries <- fallback$agents
   accepted_agent_interpretations <- list()
+  agent_validation <- list()
 
   for (agent_id in ids) {
 
@@ -2302,10 +2359,17 @@ parse_ollama_interpretation <- function(
       safe_biological_context <- fallback$agents[[agent_id]]$biological_context
     }
 
-    if (!identical(safe_summary, fallback$agents[[agent_id]]$summary) &&
-        !agent_id %in% c("gsva", "immune")) {
+    summary_accepted <- !identical(safe_summary, fallback$agents[[agent_id]]$summary) &&
+      !agent_id %in% c("gsva", "immune")
+    context_accepted <- !identical(safe_biological_context, fallback$agents[[agent_id]]$biological_context)
+    agent_validation[[agent_id]] <- list(
+      summary_accepted = summary_accepted,
+      biological_context_accepted = context_accepted
+    )
+
+    if (summary_accepted) {
       accepted_agent_interpretations[[agent_id]] <- safe_summary
-    } else if (!identical(safe_biological_context, fallback$agents[[agent_id]]$biological_context)) {
+    } else if (context_accepted) {
       accepted_agent_interpretations[[agent_id]] <- safe_biological_context
     }
 
@@ -2401,8 +2465,54 @@ parse_ollama_interpretation <- function(
     synthesis_generated = integrated_accepted || takeaway_accepted,
     synthesis_integrated_generated = integrated_accepted,
     accepted_agent_interpretations = accepted_agent_interpretations,
+    validation = list(
+      structured_response_parsed = TRUE,
+      agent_results = agent_validation,
+      agent_interpretations_accepted = length(accepted_agent_interpretations),
+      synthesis_integrated_accepted = integrated_accepted,
+      synthesis_summary_accepted = takeaway_accepted,
+      retry_attempted = FALSE,
+      retry_accepted = FALSE,
+      message = if (integrated_accepted || takeaway_accepted || length(accepted_agent_interpretations)) {
+        "Ollama content passed evidence checks."
+      } else {
+        "The structured Ollama response parsed successfully, but no model-authored interpretation passed evidence checks."
+      }
+    ),
     exchanges = exchanges
   )
+}
+
+recover_ollama_synthesis <- function(bundle, exchanges, settings, request_fn) {
+  if (isTRUE(bundle$synthesis_generated) || is.null(request_fn)) return(bundle)
+  bundle$validation <- bundle$validation %or_else% list()
+  bundle$validation$retry_attempted <- TRUE
+  retry_error <- NULL
+  narrative <- tryCatch(
+    request_fn(exchanges, bundle, settings),
+    error = function(error) {
+      retry_error <<- conditionMessage(error)
+      NULL
+    }
+  )
+  if (is.null(narrative) || !nzchar(trimws(as.character(narrative)))) {
+    bundle$validation$retry_accepted <- FALSE
+    bundle$validation$retry_error <- retry_error %or_else% "The retry returned no narrative that passed evidence checks."
+    bundle$validation$message <- paste(
+      "The structured Ollama response did not pass evidence checks, and the grounded narrative retry was not accepted."
+    )
+    return(bundle)
+  }
+  bundle$synthesis$integrated_interpretation <- as.character(narrative)
+  bundle$synthesis$deep_narrative <- as.character(narrative)
+  bundle$synthesis_generated <- TRUE
+  bundle$synthesis_integrated_generated <- TRUE
+  bundle$synthesis_recovered <- TRUE
+  bundle$validation$retry_accepted <- TRUE
+  bundle$validation$retry_error <- NULL
+  bundle$validation$message <- "The initial structured synthesis was rejected; a second grounded Ollama narrative passed evidence checks."
+  bundle$reason <- paste(bundle$reason, "A grounded narrative retry supplied the displayed researcher interpretation.")
+  bundle
 }
 
 openai_usage_total <- function(...) {
@@ -2513,7 +2623,12 @@ generate_provider_interpretation_bundle <- function(
   primary
 }
 
-generate_interpretation_bundle <- function(data_by_agent, settings = NULL, request_fn = request_ollama_interpretation) {
+generate_interpretation_bundle <- function(
+  data_by_agent,
+  settings = NULL,
+  request_fn = request_ollama_interpretation,
+  deep_narrative_request_fn = NULL
+) {
   if (is.null(names(data_by_agent)) || any(!nzchar(names(data_by_agent)))) {
     stop("data_by_agent must be a named list.", call. = FALSE)
   }
@@ -2533,14 +2648,53 @@ generate_interpretation_bundle <- function(data_by_agent, settings = NULL, reque
     return(fallback)
   }
 
+  if (length(exchanges) > 1L && identical(request_fn, request_ollama_interpretation)) {
+    retry_fn <- if (is.null(deep_narrative_request_fn)) {
+      request_ollama_deep_narrative
+    } else {
+      deep_narrative_request_fn
+    }
+    local_bundle <- recover_ollama_synthesis(
+      fallback,
+      exchanges,
+      settings,
+      retry_fn
+    )
+    if (isTRUE(local_bundle$synthesis_generated)) {
+      local_bundle$source <- "ollama"
+      local_bundle$source_label <- paste("Biological interpretation generated locally with", settings$model)
+      local_bundle$model <- settings$model
+      local_bundle$provider <- "ollama"
+      local_bundle$reason <- "Generated locally from the structured result digest and validated against saved evidence."
+    }
+    return(local_bundle)
+  }
+
   tryCatch(
     {
       response_text <- request_fn(build_ollama_prompt(exchanges), settings)
       bundle <- parse_ollama_interpretation(response_text, exchanges, settings, fallback)
+      retry_fn <- deep_narrative_request_fn
+      if (is.null(retry_fn) && identical(request_fn, request_ollama_interpretation)) {
+        retry_fn <- request_ollama_deep_narrative
+      }
+      bundle <- recover_ollama_synthesis(bundle, exchanges, settings, retry_fn)
       bundle
     },
     error = function(error) {
-      build_ollama_failure_bundle(exchanges, error, settings)
+      failure <- build_ollama_failure_bundle(exchanges, error, settings)
+      retry_fn <- deep_narrative_request_fn
+      if (is.null(retry_fn) && identical(request_fn, request_ollama_interpretation)) {
+        retry_fn <- request_ollama_deep_narrative
+      }
+      recovered <- recover_ollama_synthesis(failure, exchanges, settings, retry_fn)
+      if (isTRUE(recovered$synthesis_generated)) {
+        recovered$source <- "ollama"
+        recovered$source_label <- paste("Biological interpretation generated locally with", settings$model)
+        recovered$model <- settings$model
+        recovered$provider <- "ollama"
+      }
+      recovered
     }
   )
 }
