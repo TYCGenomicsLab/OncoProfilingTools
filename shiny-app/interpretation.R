@@ -1960,7 +1960,7 @@ request_ollama_deep_narrative <- function(exchanges, structured_bundle, settings
       options = list(
         temperature = 0.2,
         num_ctx = settings$num_ctx,
-        num_predict = min(settings$num_predict, 192L),
+        num_predict = min(settings$num_predict, 320L),
         repeat_penalty = 1.08
       )
     )) |>
@@ -2207,7 +2207,7 @@ sanitize_deep_narrative <- function(value, exchanges) {
   unsafe <- grepl(
     paste(
       "pathway activation|activated pathway",
-      "provided (json|object)|structured draft|result[_ ]digest",
+      "provided (json|object)|structured draft",
       "implications? for .*cancer treatment",
       "patient benefit|clinical efficacy|treatment recommendation|should receive|proves? caus",
       sep = "|"
