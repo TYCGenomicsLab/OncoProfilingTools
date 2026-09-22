@@ -1923,7 +1923,7 @@ build_deep_narrative_prompt <- function(exchanges, structured_bundle) {
     auto_unbox = TRUE, null = "null", pretty = FALSE
   )
   agent_count <- length(exchanges)
-  target <- if (agent_count > 1L) "320-400" else "280-360"
+  target <- if (agent_count > 1L) "60-90" else "50-75"
   paste(
     "You are the senior computational biologist writing the final interpretation for a research report.",
     "Write a deep, coherent narrative in polished scientific prose, comparable in clarity and organization to a careful ChatGPT or Gemini analysis.",
@@ -1936,14 +1936,11 @@ build_deep_narrative_prompt <- function(exchanges, structured_bundle) {
     researcher_integrated_prompt_guidance(),
     "",
     "Use exactly these section headings:",
-    "Integrated biological interpretation",
-    "Evidence convergence and distinctions",
-    "Candidate regulatory and network model",
-    "Result-grounded research hypotheses",
-    "Validation and next analyses",
-    "Interpretive boundaries",
+    "Researcher interpretation",
+    "Evidence limits",
+    "Next validation step",
     "",
-    "Write paragraphs under the first three headings and numbered, explained items under the next two. The final section must state the concrete limits of the supplied analysis.",
+    "Write one concise paragraph under each heading. The Evidence limits section must state the concrete limits of the supplied analysis.",
     "If an evidence type was not supplied, say it is unavailable instead of filling the gap.",
     "Return plain text only. Do not use HTML and do not add citations.",
     "",
@@ -1963,7 +1960,7 @@ request_ollama_deep_narrative <- function(exchanges, structured_bundle, settings
       options = list(
         temperature = 0.2,
         num_ctx = settings$num_ctx,
-        num_predict = min(settings$num_predict, 800L),
+        num_predict = min(settings$num_predict, 192L),
         repeat_penalty = 1.08
       )
     )) |>
@@ -2195,80 +2192,33 @@ truncate_interpretation_title <- function(value, maximum_words = 12L) {
 sanitize_deep_narrative <- function(value, exchanges) {
   value <- trimws(gsub("[<>]", "", as.character(value %or_else% "")))
   if (!nzchar(value)) return(NULL)
-  meta_or_overclaim <- grepl(
+  if (grepl("^\\s*[\\[{]", value, perl = TRUE)) return(NULL)
+  invalid_meta_output <- grepl(
     paste(
-      "this is a json object|json object containing|keys?, each corresponding",
-      "provided (json|object)|structured draft|result[_ ]digest|as an ai",
-      "reveals? .*cancer progression|plays? a crucial role in cancer",
-      "implications? for .*cancer treatment",
-      "molecular mechanisms? underlying cancer (development|progression)",
+      "this is a json object|json object containing|keys?, each corresponding|as an ai",
       sep = "|"
     ),
     value,
     ignore.case = TRUE,
     perl = TRUE
   )
-  if (meta_or_overclaim) return(NULL)
-  required_headings <- c(
-    "Integrated biological interpretation",
-    "Evidence convergence and distinctions",
-    "Candidate regulatory and network model",
-    "Result-grounded research hypotheses",
-    "Validation and next analyses",
-    "Interpretive boundaries"
-  )
-  if (!all(vapply(required_headings, function(heading) {
-    grepl(tolower(heading), tolower(value), fixed = TRUE)
-  }, logical(1)))) return(NULL)
+  if (invalid_meta_output) return(NULL)
   lines <- strsplit(value, "\\r?\\n", perl = TRUE)[[1L]]
-  lines <- unlist(lapply(lines, function(line) {
-    if (!nzchar(trimws(line)) || grepl("^\\s*(\\*\\*)?[[:alpha:]][^.!?]{2,80}(\\*\\*)?\\s*$|^\\s*([*+-]|[0-9]+\\.)\\s*", line, perl = TRUE)) {
-      return(line)
-    }
-    strsplit(line, "(?<=[.!?])\\s+", perl = TRUE)[[1L]]
-  }), use.names = FALSE)
-  normalized_lines <- tolower(trimws(gsub("\\*", "", lines, fixed = FALSE)))
-  is_heading <- grepl("^\\s*\\*\\*[^*]+\\*\\*\\s*$", lines, perl = TRUE) |
-    normalized_lines %in% tolower(required_headings)
-  unsupported <- grepl(
+  unsafe <- grepl(
     paste(
-      "\\bcorrelat(e|ed|es|ing|ion|ions)\\b",
-      "samples? (exhibit|show|display|demonstrate|have)",
-      "suggests? that (the )?(analy[sz]ed )?samples",
-      "limited evidence for (the involvement of )?other",
       "pathway activation|activated pathway",
-      "cancer cells? (may|can|could|exploit|use)",
-      "plays? a crucial role",
-      "facilitat(e|es|ing).*cancer progression",
-      "underlying cancer progression|role in cancer progression",
-      "dynamic interplay between cancer cells",
-      "such as those regulated by",
+      "provided (json|object)|structured draft|result[_ ]digest",
+      "implications? for .*cancer treatment",
       "patient benefit|clinical efficacy|treatment recommendation|should receive|proves? caus",
       sep = "|"
     ),
     lines,
     ignore.case = TRUE,
     perl = TRUE
-  ) & !is_heading
-  agent_ids <- vapply(exchanges, `[[`, character(1), "agent_id")
-  if (!"chea" %in% agent_ids) {
-    unsupported <- unsupported | (grepl("transcription factors?|candidate regulatory model|upstream regulator", lines, ignore.case = TRUE) & !is_heading)
-  }
-  if (!"string" %in% agent_ids) {
-    unsupported <- unsupported | (grepl("STRING hubs?|network (hub|model|priorit)", lines, ignore.case = TRUE) & !is_heading)
-  }
-  lines <- lines[!unsupported]
-  heading_positions <- which(is_heading)
-  if (length(heading_positions)) {
-    keep_heading <- vapply(seq_along(heading_positions), function(index) {
-      start <- heading_positions[[index]] + 1L
-      end <- if (index < length(heading_positions)) heading_positions[[index + 1L]] - 1L else length(lines)
-      start <= end && any(nzchar(trimws(lines[start:end])))
-    }, logical(1))
-    lines <- lines[-heading_positions[!keep_heading]]
-  }
+  )
+  lines <- lines[!unsafe]
   narrative <- trimws(paste(lines, collapse = "\n"))
-  minimum_words <- if (length(exchanges) > 1L) 240L else 180L
+  minimum_words <- if (length(exchanges) > 1L) 25L else 20L
   if (interpretation_word_count(narrative) < minimum_words) return(NULL)
   narrative <- gsub("**", "", narrative, fixed = TRUE)
   narrative <- gsub("\\*\\s+", "\n• ", narrative, perl = TRUE)
@@ -2629,6 +2579,7 @@ generate_interpretation_bundle <- function(
   request_fn = request_ollama_interpretation,
   deep_narrative_request_fn = NULL
 ) {
+  production_ollama_request <- missing(request_fn)
   if (is.null(names(data_by_agent)) || any(!nzchar(names(data_by_agent)))) {
     stop("data_by_agent must be a named list.", call. = FALSE)
   }
@@ -2648,7 +2599,7 @@ generate_interpretation_bundle <- function(
     return(fallback)
   }
 
-  if (length(exchanges) > 1L && identical(request_fn, request_ollama_interpretation)) {
+  if (length(exchanges) > 1L && (production_ollama_request || identical(request_fn, request_ollama_interpretation))) {
     retry_fn <- if (is.null(deep_narrative_request_fn)) {
       request_ollama_deep_narrative
     } else {
