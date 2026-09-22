@@ -181,7 +181,7 @@ build_app_ui <- function() {
       tags$title("OncoProfilingTools"),
       tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
       tags$link(rel = "stylesheet", href = "styles.css?v=openai-provider-3"),
-      tags$link(rel = "stylesheet", href = "pastel.css?v=openai-provider-3"),
+      tags$link(rel = "stylesheet", href = "pastel.css?v=premium-glass-1"),
       tags$script(src = "status.js?v=compact-progress-1")
     ),
     div(

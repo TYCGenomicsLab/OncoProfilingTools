@@ -915,6 +915,40 @@ build_combined_html_report <- function(
     "</section>"
   )
 
+  background_candidates <- c(
+    file.path("www", "oncoprofiling-pastel-biomedical-bg.png"),
+    file.path("shiny-app", "www", "oncoprofiling-pastel-biomedical-bg.png")
+  )
+  background_path <- background_candidates[file.exists(background_candidates)][1L]
+  background_uri <- if (length(background_path) && nzchar(background_path) && exists("image_data_uri", mode = "function")) {
+    tryCatch(image_data_uri(background_path) %or_else% "", error = function(error) "")
+  } else {
+    ""
+  }
+  premium_background <- if (nzchar(background_uri)) {
+    paste0("linear-gradient(rgba(248,246,241,.80),rgba(244,247,243,.88)),url('", background_uri, "')")
+  } else {
+    "radial-gradient(circle at 8% 4%,rgba(213,232,220,.72),transparent 31rem),radial-gradient(circle at 96% 8%,rgba(231,221,244,.66),transparent 30rem),linear-gradient(180deg,#faf7f2,#f1f6f2)"
+  }
+  premium_report_css <- paste0(
+    "body{background-image:", premium_background, ";background-size:cover;background-position:center top;background-attachment:fixed}",
+    ".hero,section,.compact-callout{background:rgba(255,255,255,.72);border-color:rgba(255,255,255,.82);box-shadow:0 18px 55px rgba(69,83,74,.10),inset 0 1px rgba(255,255,255,.9);-webkit-backdrop-filter:blur(18px) saturate(120%);backdrop-filter:blur(18px) saturate(120%)}",
+    ".hero{background:linear-gradient(135deg,rgba(222,239,230,.80),rgba(239,231,248,.74),rgba(255,239,230,.72))}",
+    ".report-nav{padding:6px;background:rgba(255,255,255,.50);border:1px solid rgba(198,211,202,.72);border-radius:14px}.report-nav a{border:0;background:rgba(255,255,255,.72);transition:transform .18s ease,box-shadow .18s ease}.report-nav a:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(72,87,78,.11)}",
+    ".run-facts>div,.agent-section,.synthesis-grid>div,.comparison-grid>div,.provider-card,.evidence-card,.hypothesis-card,.shared-interpretation-box{background:rgba(255,255,255,.76);border-color:rgba(198,211,202,.72);box-shadow:inset 0 1px rgba(255,255,255,.86)}",
+    ".researcher-interpretation{background:linear-gradient(135deg,rgba(242,235,249,.80),rgba(229,242,235,.72));border-color:rgba(202,188,222,.78);box-shadow:0 16px 42px rgba(91,76,117,.10)}",
+    ".interpretation-view-tabs{padding:4px;gap:4px;border:1px solid rgba(190,179,208,.70);border-radius:13px;background:rgba(255,255,255,.64);box-shadow:0 7px 20px rgba(91,76,117,.08)}",
+    ".interpretation-view-button{border:0!important;border-radius:9px;transition:background .18s ease,transform .18s ease,box-shadow .18s ease}.interpretation-view-button:hover{transform:translateY(-1px)}",
+    ".interpretation-view-button[data-interpretation-view='openai'].active{background:linear-gradient(135deg,#7668a5,#a06e9d)}",
+    ".interpretation-view-button[data-interpretation-view='ollama'].active{background:linear-gradient(135deg,#4f8c73,#72aa8e)}",
+    ".interpretation-view-button[data-interpretation-view='technical'].active{background:linear-gradient(135deg,#66839b,#829bb0)}",
+    ".interpretation-view-button.active{box-shadow:0 7px 18px rgba(91,76,117,.22)}",
+    ".report-tools button{background:rgba(255,255,255,.78);box-shadow:0 7px 18px rgba(72,87,78,.07);transition:transform .18s ease,box-shadow .18s ease}.report-tools button:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(72,87,78,.12)}",
+    ".report-disclosure,.comparison-agent{background:rgba(255,255,255,.66)}",
+    "@media(max-width:700px){body{background-attachment:scroll;background-position:42% top}}",
+    "@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.hero,section,.compact-callout{background:rgba(255,253,248,.97)}}"
+  )
+
   html <- paste0(
     "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
     "<title>", html_escape_value(report_title), "</title><style>",
@@ -932,6 +966,7 @@ build_combined_html_report <- function(
     ".audience-grid,.prompt-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.audience-panel{padding:15px;border:1px solid var(--line);border-radius:10px}.plain-reader{background:#edf5ef}.technical-reader{background:#f3edf8;border-color:#d4c5e4}.audience-panel h3,.audience-panel h4{margin-top:5px}.synthesis-grid,.comparison-grid{gap:12px}.synthesis-grid>div,.comparison-grid>div{padding:13px;border-radius:10px}",
     ".report-disclosure,.comparison-agent{margin-top:9px;padding:0;border:1px solid var(--line);border-radius:9px;background:#fff}.report-disclosure>summary,.comparison-agent>summary{padding:9px 11px;cursor:pointer;font-weight:750;color:#3f5149}.report-disclosure[open]>summary,.comparison-agent[open]>summary{border-bottom:1px solid var(--line)}.disclosure-body{padding:11px}.prompt-disclosure pre{max-height:430px;margin:0;overflow:auto;padding:13px;background:#1f2925;color:#eef5f0;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.48 ui-monospace,SFMono-Regular,Menlo,monospace}.mode-note{min-height:48px}.provider-card{padding:15px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.provider-card h3{margin:4px 0}.provider-state{color:var(--muted)}.metric-strip{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.metric-strip>div{padding:8px;background:#fff;border:1px solid var(--line);border-radius:8px}.metric-strip span{display:block;color:var(--muted);font-size:11px}",
         ".interactive-chart{height:430px;border-radius:10px}.string-3d-chart{height:500px}.string-network-layout{gap:12px}.string-side-panel{padding:14px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.string-side-panel h4{margin-top:0}.string-degree-chart{height:390px}.researcher-interpretation{margin:14px 0;padding:15px;background:#f3edf8;border:1px solid #d4c5e4;border-radius:10px}.researcher-interpretation h3,.researcher-interpretation h4{margin-top:5px}.interpretation-switcher-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.interpretation-view-tabs{display:flex;flex-wrap:wrap;gap:0;border:1px solid #b9aecb;border-radius:9px;overflow:hidden;background:#fff}.interpretation-view-button{padding:8px 12px;border:0;border-right:1px solid #d4c5e4;background:#fff;color:var(--ink);font-weight:750;cursor:pointer}.interpretation-view-button:last-child{border-right:0}.interpretation-view-button.active{background:#62588f;color:#fff}.shared-interpretation-box{min-height:150px;padding:14px;background:#fffdf8;border:1px solid #d4c5e4;border-radius:9px}.shared-interpretation-box p{white-space:pre-line}.shared-interpretation-box p:last-child{margin-bottom:0}.researcher-editable[contenteditable='true']{outline:3px solid rgba(201,95,69,.28);background:#fffaf2}.report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.report-tools button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}.report-tools button:hover{border-color:var(--accent)}.report-tools span{color:var(--muted);font-size:12px}.result-count-note{padding:9px 11px;background:#f5f7f4;border-left:3px solid #8cac93;border-radius:7px}.synthesis-grid td{white-space:normal;min-width:120px}.provider-provenance{font-weight:700}.method-callout{margin-bottom:10px;padding:13px;border-left-width:4px;border-radius:8px}.compact-callout h2{font-size:20px}.limitations{border-left-width:4px}@media(max-width:800px){.audience-grid,.prompt-mode-grid{grid-template-columns:1fr}.mode-note{min-height:0}.interactive-chart{height:390px}.string-3d-chart{height:420px}.string-degree-chart{height:330px}.interpretation-switcher-heading{display:block}.interpretation-view-tabs{margin-top:12px;width:max-content;max-width:100%}}@media(max-width:700px){.page{padding:14px 9px 40px}.hero,section,.compact-callout{padding:15px}.agent-section{padding:13px}h1{font-size:29px}.interpretation-view-tabs{width:100%}.interpretation-view-button{flex:1;padding:8px 6px;font-size:11px}}",
+    premium_report_css,
     "</style>", if (nzchar(plotly_library)) paste0("<script>", plotly_library, "</script>") else "", "</head><body><main class='page'>",
     "<header class='hero'><span class='badge'>", html_escape_value(report_badge), "</span><h1>", html_escape_value(report_title), "</h1><p class='muted'>Self-contained research report · generated ", html_escape_value(generated_at), "</p>",
     "<div class='run-facts'><div><span>Input file</span><strong>", html_escape_value(report_value(input_context$name)), "</strong></div><div><span>Workflow</span><strong>", html_escape_value(workflow), "</strong></div><div><span>Mapped analysis genes</span><strong>", html_escape_value(report_value(mapping$output_symbol_count, report_value(configuration$original_gene_count))), "</strong></div></div>",
