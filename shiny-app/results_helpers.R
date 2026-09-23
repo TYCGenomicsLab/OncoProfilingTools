@@ -598,6 +598,13 @@ results_center_ui <- function(selected_agents = names(agent_titles), workflow = 
 
       div(
         class = "results-center-actions",
+        tags$button(
+          id = "presentation_mode_toggle",
+          type = "button",
+          class = "results-action-button presentation-mode-button",
+          `aria-pressed` = "false",
+          "Presentation mode"
+        ),
         actionLink(
           "results_back_home",
           "← Main menu",
@@ -1144,6 +1151,40 @@ live_interpretation_tabs <- function(bundle) {
   )
 }
 
+cross_database_agreement_heatmap_ui <- function(exchanges) {
+  matrix <- cross_database_program_matrix(exchanges)
+  if (!nrow(matrix) || !ncol(matrix)) {
+    return(shiny::div(class = "agreement-heatmap-empty", "Cross-database theme agreement is unavailable for this run."))
+  }
+  shiny::div(
+    class = "agreement-heatmap-card",
+    shiny::div(
+      class = "agreement-heatmap-heading",
+      shiny::div(shiny::span(class = "section-label", "CROSS-DATABASE VIEW"), shiny::h4("Biological theme agreement")),
+      shiny::p("Filled cells indicate that a computed result label mapped to the theme; they do not establish independent validation.")
+    ),
+    shiny::div(
+      class = "agreement-heatmap",
+      style = paste0("--agreement-columns:", ncol(matrix), ";"),
+      shiny::div(class = "agreement-corner", "Database"),
+      lapply(colnames(matrix), function(program) shiny::div(class = "agreement-column-label", program)),
+      unlist(lapply(seq_len(nrow(matrix)), function(row_index) {
+        c(
+          list(shiny::div(class = "agreement-row-label", rownames(matrix)[[row_index]])),
+          lapply(seq_len(ncol(matrix)), function(column_index) {
+            present <- isTRUE(matrix[row_index, column_index])
+            shiny::div(
+              class = paste("agreement-cell", if (present) "agreement-present" else "agreement-absent"),
+              title = paste(rownames(matrix)[[row_index]], "·", colnames(matrix)[[column_index]], if (present) "present" else "not detected"),
+              `aria-label` = paste(rownames(matrix)[[row_index]], colnames(matrix)[[column_index]], if (present) "present" else "not detected")
+            )
+          })
+        )
+      }), recursive = FALSE)
+    )
+  )
+}
+
 build_cross_agent_synthesis_ui <- function(bundle) {
   synthesis <- bundle$synthesis
   if (is_interpretation_progress_bundle(bundle)) {
@@ -1161,6 +1202,7 @@ build_cross_agent_synthesis_ui <- function(bundle) {
     class = "cross-agent-content",
     interpretation_source_ui(bundle),
     live_interpretation_tabs(bundle),
+    cross_database_agreement_heatmap_ui(bundle$exchanges %or_else% list()),
     div(
       class = "cross-agent-grid",
       div(h4("Convergent signals"), tags$ul(convergences)),

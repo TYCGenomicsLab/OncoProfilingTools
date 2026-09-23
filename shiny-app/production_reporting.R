@@ -736,6 +736,27 @@ report_interpretation_tab_views <- function(bundle) {
   list(current = current, views = views)
 }
 
+report_agreement_heatmap_html <- function(exchanges) {
+  matrix <- cross_database_program_matrix(exchanges)
+  if (!nrow(matrix) || !ncol(matrix)) {
+    return("<div class='agreement-heatmap-empty'>Cross-database theme agreement is unavailable for this run.</div>")
+  }
+  column_labels <- paste0("<div class='agreement-column-label'>", html_escape_value(colnames(matrix)), "</div>", collapse = "")
+  rows <- paste0(vapply(seq_len(nrow(matrix)), function(row_index) {
+    cells <- paste0(vapply(seq_len(ncol(matrix)), function(column_index) {
+      present <- isTRUE(matrix[row_index, column_index])
+      label <- paste(rownames(matrix)[[row_index]], colnames(matrix)[[column_index]], if (present) "present" else "not detected")
+      paste0("<div class='agreement-cell ", if (present) "agreement-present" else "agreement-absent", "' title='", html_escape_value(label), "' aria-label='", html_escape_value(label), "'></div>")
+    }, character(1)), collapse = "")
+    paste0("<div class='agreement-row-label'>", html_escape_value(rownames(matrix)[[row_index]]), "</div>", cells)
+  }, character(1)), collapse = "")
+  paste0(
+    "<div class='agreement-heatmap-card'><div class='agreement-heatmap-heading'><div><span class='kicker'>CROSS-DATABASE VIEW</span><h3>Biological theme agreement</h3></div>",
+    "<p>Filled cells indicate that a computed result label mapped to the theme; they do not establish independent validation.</p></div>",
+    "<div class='agreement-heatmap' style='--agreement-columns:", ncol(matrix), "'><div class='agreement-corner'>Database</div>", column_labels, rows, "</div></div>"
+  )
+}
+
 build_combined_html_report <- function(
   destination,
   interpretation_bundle = NULL,
@@ -840,6 +861,7 @@ build_combined_html_report <- function(
     "<p class='interpretation-view-provenance source provider-provenance'>", html_escape_value(active_interpretation$provenance), "</p>",
     "<div class='shared-interpretation-box researcher-editable' role='tabpanel'>", active_interpretation$html, "</div>",
     "<script type='application/json' class='interpretation-tab-data'>", report_json(interpretation_tabs), "</script></div>",
+    report_agreement_heatmap_html(interpretation_bundle$exchanges %or_else% list()),
     "<div class='synthesis-grid'><div><h3>1. Key Biological Findings</h3>", report_list_html(synthesis$convergences),
     "</div><div><h3>2. Cross-Database Agreement</h3>", report_pathway_overlap_html(pathway_agents),
     "</div><div><h3>3. Biomarker / Gene Evidence</h3><p>", html_escape_value(synthesis$regulatory_network %or_else% "No consolidated regulator interpretation was available."),
@@ -930,10 +952,26 @@ build_combined_html_report <- function(
   } else {
     "radial-gradient(circle at 8% 4%,rgba(213,232,220,.72),transparent 31rem),radial-gradient(circle at 96% 8%,rgba(231,221,244,.66),transparent 30rem),linear-gradient(180deg,#faf7f2,#f1f6f2)"
   }
+  logo_candidates <- c(
+    file.path("www", "oncoprofiling-logo-mark.png"),
+    file.path("shiny-app", "www", "oncoprofiling-logo-mark.png")
+  )
+  logo_path <- logo_candidates[file.exists(logo_candidates)][1L]
+  logo_uri <- if (length(logo_path) && nzchar(logo_path) && exists("image_data_uri", mode = "function")) {
+    tryCatch(image_data_uri(logo_path) %or_else% "", error = function(error) "")
+  } else {
+    ""
+  }
+  report_logo_html <- if (nzchar(logo_uri)) {
+    paste0("<img class='report-cover-logo' src='", logo_uri, "' alt='OncoProfiling mark'>")
+  } else {
+    "<span class='report-cover-logo report-logo-fallback' aria-hidden='true'>OP</span>"
+  }
   premium_report_css <- paste0(
     "body{background-image:", premium_background, ";background-size:cover;background-position:center top;background-attachment:fixed}",
     ".hero,section,.compact-callout{background:rgba(255,255,255,.72);border-color:rgba(255,255,255,.82);box-shadow:0 18px 55px rgba(69,83,74,.10),inset 0 1px rgba(255,255,255,.9);-webkit-backdrop-filter:blur(18px) saturate(120%);backdrop-filter:blur(18px) saturate(120%)}",
     ".hero{background:linear-gradient(135deg,rgba(222,239,230,.80),rgba(239,231,248,.74),rgba(255,239,230,.72))}",
+    ".report-cover-brand{display:flex;align-items:center;gap:18px}.report-cover-logo{width:76px;height:76px;flex:0 0 76px;object-fit:contain;padding:6px;background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.9);border-radius:22px;box-shadow:0 14px 34px rgba(82,70,112,.16)}.report-cover-brand h1{margin-top:8px}.report-logo-fallback{display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,#70a38c,#8a72ae)}",
     ".report-nav{padding:6px;background:rgba(255,255,255,.50);border:1px solid rgba(198,211,202,.72);border-radius:14px}.report-nav a{border:0;background:rgba(255,255,255,.72);transition:transform .18s ease,box-shadow .18s ease}.report-nav a:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(72,87,78,.11)}",
     ".run-facts>div,.agent-section,.synthesis-grid>div,.comparison-grid>div,.provider-card,.evidence-card,.hypothesis-card,.shared-interpretation-box{background:rgba(255,255,255,.76);border-color:rgba(198,211,202,.72);box-shadow:inset 0 1px rgba(255,255,255,.86)}",
     ".researcher-interpretation{background:linear-gradient(135deg,rgba(242,235,249,.80),rgba(229,242,235,.72));border-color:rgba(202,188,222,.78);box-shadow:0 16px 42px rgba(91,76,117,.10)}",
@@ -945,7 +983,8 @@ build_combined_html_report <- function(
     ".interpretation-view-button.active{box-shadow:0 7px 18px rgba(91,76,117,.22)}",
     ".report-tools button{background:rgba(255,255,255,.78);box-shadow:0 7px 18px rgba(72,87,78,.07);transition:transform .18s ease,box-shadow .18s ease}.report-tools button:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(72,87,78,.12)}",
     ".report-disclosure,.comparison-agent{background:rgba(255,255,255,.66)}",
-    "@media(max-width:700px){body{background-attachment:scroll;background-position:42% top}}",
+    ".agreement-heatmap-card{margin:14px 0;padding:16px;background:linear-gradient(135deg,rgba(230,245,238,.84),rgba(241,233,250,.82));border:1px solid rgba(199,211,203,.82);border-radius:14px}.agreement-heatmap-heading{display:flex;justify-content:space-between;gap:18px;margin-bottom:12px}.agreement-heatmap-heading h3{margin:3px 0}.agreement-heatmap-heading p{max-width:520px;margin:0;color:var(--muted);font-size:12px;text-align:right}.agreement-heatmap{display:grid;grid-template-columns:minmax(110px,1.25fr) repeat(var(--agreement-columns),minmax(72px,1fr));gap:5px;overflow-x:auto}.agreement-corner,.agreement-column-label,.agreement-row-label{padding:7px 6px;color:#596a61;font-size:11px;font-weight:750}.agreement-column-label{text-align:center;overflow-wrap:anywhere}.agreement-cell{min-height:31px;border:1px solid rgba(190,204,195,.60);border-radius:7px}.agreement-present{background:linear-gradient(135deg,#85b79b,#8879b2);box-shadow:inset 0 1px rgba(255,255,255,.55)}.agreement-absent{background:rgba(255,255,255,.48)}.agreement-heatmap-empty{padding:13px;color:var(--muted);border:1px dashed var(--line);border-radius:10px}",
+    "@media(max-width:700px){body{background-attachment:scroll;background-position:42% top}.report-cover-brand{align-items:flex-start}.report-cover-logo{width:58px;height:58px;flex-basis:58px}.agreement-heatmap-heading{display:block}.agreement-heatmap-heading p{margin-top:7px;text-align:left}}",
     "@supports not ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.hero,section,.compact-callout{background:rgba(255,253,248,.97)}}"
   )
 
@@ -968,7 +1007,7 @@ build_combined_html_report <- function(
         ".interactive-chart{height:430px;border-radius:10px}.string-3d-chart{height:500px}.string-network-layout{gap:12px}.string-side-panel{padding:14px;background:#faf9f5;border:1px solid var(--line);border-radius:10px}.string-side-panel h4{margin-top:0}.string-degree-chart{height:390px}.researcher-interpretation{margin:14px 0;padding:15px;background:#f3edf8;border:1px solid #d4c5e4;border-radius:10px}.researcher-interpretation h3,.researcher-interpretation h4{margin-top:5px}.interpretation-switcher-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.interpretation-view-tabs{display:flex;flex-wrap:wrap;gap:0;border:1px solid #b9aecb;border-radius:9px;overflow:hidden;background:#fff}.interpretation-view-button{padding:8px 12px;border:0;border-right:1px solid #d4c5e4;background:#fff;color:var(--ink);font-weight:750;cursor:pointer}.interpretation-view-button:last-child{border-right:0}.interpretation-view-button.active{background:#62588f;color:#fff}.shared-interpretation-box{min-height:150px;padding:14px;background:#fffdf8;border:1px solid #d4c5e4;border-radius:9px}.shared-interpretation-box p{white-space:pre-line}.shared-interpretation-box p:last-child{margin-bottom:0}.researcher-editable[contenteditable='true']{outline:3px solid rgba(201,95,69,.28);background:#fffaf2}.report-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.report-tools button{padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);font-weight:700;cursor:pointer}.report-tools button:hover{border-color:var(--accent)}.report-tools span{color:var(--muted);font-size:12px}.result-count-note{padding:9px 11px;background:#f5f7f4;border-left:3px solid #8cac93;border-radius:7px}.synthesis-grid td{white-space:normal;min-width:120px}.provider-provenance{font-weight:700}.method-callout{margin-bottom:10px;padding:13px;border-left-width:4px;border-radius:8px}.compact-callout h2{font-size:20px}.limitations{border-left-width:4px}@media(max-width:800px){.audience-grid,.prompt-mode-grid{grid-template-columns:1fr}.mode-note{min-height:0}.interactive-chart{height:390px}.string-3d-chart{height:420px}.string-degree-chart{height:330px}.interpretation-switcher-heading{display:block}.interpretation-view-tabs{margin-top:12px;width:max-content;max-width:100%}}@media(max-width:700px){.page{padding:14px 9px 40px}.hero,section,.compact-callout{padding:15px}.agent-section{padding:13px}h1{font-size:29px}.interpretation-view-tabs{width:100%}.interpretation-view-button{flex:1;padding:8px 6px;font-size:11px}}",
     premium_report_css,
     "</style>", if (nzchar(plotly_library)) paste0("<script>", plotly_library, "</script>") else "", "</head><body><main class='page'>",
-    "<header class='hero'><span class='badge'>", html_escape_value(report_badge), "</span><h1>", html_escape_value(report_title), "</h1><p class='muted'>Self-contained research report · generated ", html_escape_value(generated_at), "</p>",
+    "<header class='hero'><div class='report-cover-brand'>", report_logo_html, "<div><span class='badge'>", html_escape_value(report_badge), "</span><h1>", html_escape_value(report_title), "</h1><p class='muted'>Self-contained research report · generated ", html_escape_value(generated_at), "</p></div></div>",
     "<div class='run-facts'><div><span>Input file</span><strong>", html_escape_value(report_value(input_context$name)), "</strong></div><div><span>Workflow</span><strong>", html_escape_value(workflow), "</strong></div><div><span>Mapped analysis genes</span><strong>", html_escape_value(report_value(mapping$output_symbol_count, report_value(configuration$original_gene_count))), "</strong></div></div>",
     "<div class='report-tools' aria-label='Report editing and download controls'><button type='button' id='toggle-edit'>Enable researcher text editing</button><button type='button' id='download-edited'>Download edited HTML</button><span>Only researcher interpretation fields are editable; computed evidence remains protected.</span></div>",
     "<h2>Analysis at a glance</h2><div class='agent-run-strip'>", summary_items, "</div>",

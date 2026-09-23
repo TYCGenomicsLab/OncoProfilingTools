@@ -1,6 +1,18 @@
 (function(){
   function onReady(callback){if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',callback);}else{callback();}}
   onReady(function(){
+    function setPresentationMode(enabled){
+      document.body.classList.toggle('presentation-mode',enabled);
+      var button=document.getElementById('presentation_mode_toggle');
+      if(button){button.textContent=enabled?'Exit presentation':'Presentation mode';button.setAttribute('aria-pressed',enabled?'true':'false');}
+    }
+    document.addEventListener('click',function(event){
+      var button=event.target.closest&&event.target.closest('#presentation_mode_toggle');
+      if(button){setPresentationMode(!document.body.classList.contains('presentation-mode'));}
+    });
+    document.addEventListener('keydown',function(event){
+      if(event.key==='Escape'&&document.body.classList.contains('presentation-mode'))setPresentationMode(false);
+    });
     if(!window.Shiny)return;
     Shiny.addCustomMessageHandler('module-compatibility',function(message){
       var card=document.getElementById('module-card-'+message.key);

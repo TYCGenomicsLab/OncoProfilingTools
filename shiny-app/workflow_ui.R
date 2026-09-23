@@ -61,11 +61,12 @@ workflow_page_ui <- function(mode) {
         "Rank observed assay responses independently from biomarker enrichment; response rank alone does not establish mechanism or clinical efficacy."
       }),
       div(
-        class = "workflow-capabilities",
+        class = "workflow-capabilities analysis-stepper",
         div(strong("01"), span("Validate input")),
-        div(strong("02"), span("Run compatible agents")),
-        div(strong("03"), span("Explore interactive evidence")),
-        div(strong("04"), span("Review integrated interpretation"))
+        div(strong("02"), span("Configure agents")),
+        div(strong("03"), span("Run analysis")),
+        div(strong("04"), span("Review evidence")),
+        div(strong("05"), span("Interpret & export"))
       )
     ),
     div(
@@ -181,14 +182,14 @@ build_app_ui <- function() {
       tags$title("OncoProfilingTools"),
       tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
       tags$link(rel = "stylesheet", href = "styles.css?v=openai-provider-3"),
-      tags$link(rel = "stylesheet", href = "pastel.css?v=premium-glass-1"),
-      tags$script(src = "status.js?v=compact-progress-1")
+      tags$link(rel = "stylesheet", href = "pastel.css?v=premium-suite-2"),
+      tags$script(src = "status.js?v=presentation-mode-1")
     ),
     div(
       class = "app-shell",
       header(
         class = "site-header",
-        div(class = "brand-mark", "OP"),
+        div(class = "brand-mark", tags$img(src = "oncoprofiling-logo-mark.png", alt = "", class = "brand-logo")),
         div(class = "brand-copy", h1("OncoProfilingTools"), p("Local biomarker and pharmacogenomic research")),
         uiOutput("ai_privacy_status", inline = TRUE)
       ),

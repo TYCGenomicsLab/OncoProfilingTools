@@ -124,6 +124,26 @@ agent_interpretation_context <- function(agent_id) {
   value
 }
 
+cross_database_program_matrix <- function(exchanges, maximum_programs = 8L) {
+  exchanges <- exchanges %or_else% list()
+  if (!length(exchanges)) return(matrix(FALSE, nrow = 0L, ncol = 0L))
+  programs_by_agent <- lapply(exchanges, function(exchange) {
+    values <- unique(trimws(as.character(exchange$detected_programs %or_else% character())))
+    values[nzchar(values)]
+  })
+  keep <- lengths(programs_by_agent) > 0L
+  if (!any(keep)) return(matrix(FALSE, nrow = 0L, ncol = 0L))
+  programs_by_agent <- programs_by_agent[keep]
+  exchanges <- exchanges[keep]
+  counts <- sort(table(unlist(programs_by_agent, use.names = FALSE)), decreasing = TRUE)
+  programs <- names(utils::head(counts, maximum_programs))
+  result <- vapply(programs_by_agent, function(values) programs %in% values, logical(length(programs)))
+  result <- t(result)
+  rownames(result) <- make.unique(toupper(vapply(exchanges, `[[`, character(1), "agent_id")))
+  colnames(result) <- programs
+  result
+}
+
 default_ollama_settings <- function() {
   list(
     enabled = TRUE,

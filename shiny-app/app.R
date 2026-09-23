@@ -708,6 +708,15 @@ server <- function(input, output, session) {
     if (is.null(run_finished())) return(NULL)
     results <- results_value()
     selected <- selected_value()
+    completed <- sum(vapply(results, function(value) isTRUE(value$success), logical(1)))
+    total_rows <- sum(vapply(results, function(value) {
+      table <- result_table(value)
+      if (is.null(table)) 0L else nrow(table)
+    }, integer(1)))
+    elapsed <- max(0L, as.integer(difftime(run_finished(), run_started(), units = "secs")))
+    interpretation <- results_controller$interpretation_bundle()
+    provider <- toupper(as.character(interpretation$provider %or_else% interpretation$source %or_else% "computed"))
+    model <- as.character(interpretation$model %or_else% "Rules-based")
     status_items <- lapply(names(module_meta), function(key) {
       state <- if (key %in% names(results) && isTRUE(results[[key]]$success)) "Completed" else if (key %in% selected) "Failed" else "Not executed"
       div(class = paste("summary-module", tolower(gsub(" ", "-", state))), span(if (state == "Completed") "✓" else if (state == "Failed") "!" else "–"), module_meta[[key]]$title, tags$small(state))
@@ -715,7 +724,15 @@ server <- function(input, output, session) {
     section(
       class = "panel final-summary",
       div(class = "summary-head", div(span(class = "eyebrow", "FINAL SUMMARY"), h2("Analysis run complete"), p(input$dataset$name)), downloadButton("download_report", "Download report", class = "report-button")),
-      div(class = "summary-metrics", div(span("Dataset"), strong(input$dataset$name)), div(span("Analysis genes"), strong(paste0(format(length(profile()$analysis_genes), big.mark = ","), " / ", format(length(profile()$genes), big.mark = ",")))), div(span("Modules executed"), strong(length(selected)))),
+      div(
+        class = "summary-metrics dashboard-summary-cards",
+        div(span("Dataset"), strong(input$dataset$name)),
+        div(span("Analysis genes"), strong(paste0(format(length(profile()$analysis_genes), big.mark = ","), " / ", format(length(profile()$genes), big.mark = ",")))),
+        div(span("Modules completed"), strong(paste0(completed, " / ", length(selected)))),
+        div(span("Saved result rows"), strong(format(total_rows, big.mark = ","))),
+        div(span("Interpretation"), strong(paste(provider, model, sep = " · "))),
+        div(span("Runtime"), strong(paste(elapsed, "seconds")))
+      ),
       div(class = "summary-modules", status_items)
     )
   })
