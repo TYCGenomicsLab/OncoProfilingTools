@@ -8,14 +8,15 @@ Authors@R: c(
     person(given = "Katarzyna M.", family = "Tyc", role = "aut", comment = c(ORCID = "0000-0002-3850-6934"))
     )
 Description: Provides S4 classes and methods for managing and analyzing
-    cancer genomic profiling data, with integration to the DepMap project
-    for downloading and organizing oncology assays.
+    cancer genomic profiling data, including assay loading, enrichment,
+    pharmacogenomic, and interactive oncology analysis workflows.
 License: file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports:
     methods,
     httr2,
+    jsonlite,
     tibble,
     dplyr,
     enumr,
@@ -24,18 +25,52 @@ Imports:
     SummarizedExperiment,
     MultiAssayExperiment,
     SingleCellExperiment,
+    clusterProfiler,
+    org.Hs.eg.db,
+    ReactomePA,
+    STRINGdb,
+    immunedeconv,
+    msigdbr
 Remotes:
-    ElianHugh/enumr@main
+    ElianHugh/enumr@main,
+    omnideconv/immunedeconv
 Suggests:
+    testthat (>= 3.0.0),
     roxygen2,
     knitr,
     rmarkdown,
     openxlsx,
     ggplot2,
-    ggrepel
+    ggrepel,
+    DBI,
+    RSQLite,
+    qvalue,
+    shiny,
+    readr,
+    DT,
+    processx,
+    htmltools,
+    base64enc,
+    enrichR,
+    GSVA,
+    pheatmap,
+    igraph,
+    plotly,
+    htmlwidgets
 RoxygenNote: 8.0.0
 Config/roxygen2/markdown: true
+Config/testthat/edition: 3
 Collate:
+    'agent-chea.R'
+    'agent-go.R'
+    'agent-gsva.R'
+    'agent-hallmark.R'
+    'agent-immune.R'
+    'agent-kegg.R'
+    'agent-reactome.R'
+    'agent-report.R'
+    'agent-string.R'
+    'agent-wikipathways.R'
     'class-DrugResponseAssay.R'
     'class-ExpressionAssay.R'
     'class-MutationAssay.R'
